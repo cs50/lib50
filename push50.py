@@ -53,19 +53,18 @@ class ProgressBar:
         self._progressing = False
         self._thread.join()
 
-def check_announcements():
-    """Check for any announcements from cs50.me, raise Error if so"""
-    res = requests.get("https://cs50.me/status/submit50") # TODO change this to submit50.io!
-    if res.status_code == 200 and res.text.strip():
-        raise Error(res.text.strip())
-
 def check_dependencies():
-    """Check whether git >2.7 is installed"""
-    # require git 2.7+, so that credential-cache--daemon ignores SIGHUP
-    # https://github.com/git/git/blob/v2.7.0/credential-cache--daemon.c
+    """
+    Check that dependencies are installed:
+    - require git 2.7+, so that credential-cache--daemon ignores SIGHUP
+        https://github.com/git/git/blob/v2.7.0/credential-cache--daemon.c
+    """
+
+    # check that git is installed
     if not shutil.which("git"):
         raise Error(_("You don't have git. Install git, then re-run!"))
 
+    # check that git --version > 2.7
     version = subprocess.check_output(["git", "--version"]).decode("utf-8")
     matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
     if not matches or StrictVersion(matches.group(1)) < StrictVersion("2.7.0"):
@@ -79,7 +78,7 @@ def connect(org, branch, sentinel = None):
     returns .push50.yaml
     """
     with ProgressBar("Connecting"):
-        # TODO check version vs submit50.io (or cs50.me)
+        # TODO check version vs submit50.io (or cs50.me) TODO Should move to submit50
         if sentinel:
             # TODO ensure sentinel exists at org/repo/branch
             pass
@@ -129,7 +128,6 @@ def upload(branch, password):
         pass
 
 def push(org, branch, sentinel = None):
-    check_announcements()
     check_dependencies()
 
     push50_yaml = connect(org, branch, sentinel)
@@ -142,14 +140,6 @@ def push(org, branch, sentinel = None):
 
         upload(branch, user)
 
-# example check50 call
-push("check50", "hello", sentinel = ".check50.yaml")
-
-"""
-with ProgressBar("Connecting") as progress_bar:
-    time.sleep(5)
-    progress_bar.pause()
-    time.sleep(5)
-    progress_bar.unpause()
-    time.sleep(5)
-"""
+if __name__ == "__main__":
+    # example check50 call
+    push("check50", "hello", sentinel = ".check50.yaml")
