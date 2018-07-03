@@ -9,6 +9,7 @@ import contextlib
 import shutil
 import gettext
 import yaml
+import git
 from threading import Thread
 from distutils.version import StrictVersion
 
@@ -47,7 +48,7 @@ def connect(org, branch, sentinel = None):
             _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / str(sentinel))
 
         # ensure .push50.yaml exists at org/repo/branch
-        push50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".path50.yaml")
+        push50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".push50.yaml")
 
         # parse .push50.yaml
         push50_yaml = yaml.safe_load(push50_yaml_content)
@@ -114,6 +115,9 @@ def check_dependencies():
 class Error(Exception):
     pass
 
+class InvalidSlug(Error):
+    pass
+
 class User:
     def __init__(self, name, password, email, repo):
         self.name = name
@@ -156,26 +160,50 @@ class ProgressBar:
         self._progressing = False
         self._thread.join()
 
-def _parse_slug(slug):
+def _parse_slug(slug, offline=False):
     """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
     if slug.startswith("/") and slug.endswith("/"):
-        raise Error(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(slug.strip("/"))))
+        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(slug.strip("/"))))
     elif slug.startswith("/"):
-        raise Error(_("Invalid slug. Did you mean {}, without the leading slash?".format(slug.strip("/"))))
+        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading slash?".format(slug.strip("/"))))
     elif slug.endswith("/"):
-        raise Error(_("Invalid slug. Did you mean {}, without the trailing slash?".format(slug.strip("/"))))
+        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the trailing slash?".format(slug.strip("/"))))
 
-    # TODO
+    # Find third "/" in identifier
+    idx = slug.find("/", slug.find("/") + 1)
+    if idx == -1:
+        raise InvalidSlug(slug)
 
-    return "org", "repo", "branch", pathlib.Path("problem_dir")
+    remainder = slug[idx+1:]
+    org = slug.split("/")[0]
+    repo = slug.split("/")[1]
+
+    def parse_branch(offline):
+        try:
+            if not offline:
+                try:
+                    return parse_branch(offline=True)
+                except InvalidSlug:
+                    branches = (line.split("\t")[1].replace("refs/heads/", "")
+                                for line in git.Git().ls_remote(f"https://github.com/{org}/{repo}", heads=True).split("\n"))
+            else:
+                branches = map(str, git.Repo(f"~/.local/share/push50/{org}/{repo}").branches)
+        except git.GitError:
+            raise InvalidSlug(slug)
+
+        for branch in branches:
+            if remainder.startswith(f"{branch}/"):
+                return branch, remainder[len(branch)+1:]
+        else:
+            raise InvalidSlug(slug)
+
+    branch, problem = parse_branch(offline)
+
+    return org, repo, branch, pathlib.Path(problem)
 
 def _get_content_from(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
-    # TODO remove
-    # org, repo, branch, filepath = "cs50", "problems2", "master", "hello/.push50.yaml"
-
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
-    print(url)
     r = requests.get(url)
     if not r.ok:
         raise Error(_("Invalid slug. Did you mean to submit something else?"))
