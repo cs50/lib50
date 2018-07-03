@@ -1,10 +1,18 @@
 import sys
 import time
 import requests
+import contextlib
 from threading import Thread
 
 class Error(Exception):
     pass
+
+class User:
+    def __init__(self, name, password, email, repo):
+        self.name = name
+        self.password = password
+        self.email = email
+        self.repo = repo
 
 class ProgressBar:
     """Show a progress bar starting with message"""
@@ -47,25 +55,51 @@ def check_announcements():
     if res.status_code == 200 and res.text.strip():
         raise Error(res.text.strip())
 
-def push(org, branch, sentinel = None):
-    # TODO check announcements
+def check_dependencies():
+    """Check whether git >2.7 is installed"""
     # TODO check for git 2.7
+    pass
 
+def connect(org, branch, sentinel = None):
+    """
+    Check version with submit50.io, raises Error if mismatch
+    Ensure .push50.yaml and sentinel exist, raises Error if does not exist
+    Check that all required files as per .push50.yaml are present
+    returns .push50.yaml
+    """
     with ProgressBar("Connecting"):
-        # TODO TODO move, decide on commit name
         # TODO check version vs submit50.io (or cs50.me)
         if sentinel:
             # TODO ensure sentinel exists at org/repo/branch
             pass
         # TODO ensure .push50.yaml exists at org/repo/branch
+
         # TODO parse .push50.yaml
         # TODO check for missing files
-        pass
 
+        return ".push50.yaml"
+
+@contextlib.contextmanager
+def authenticate():
+    """
+    Authenticate with GitHub via SSH if possible
+    Otherwise authenticate via HTTPS
+    returns: an authenticated User
+    """
     with ProgressBar("Authenticating"):
-        # TODO authenticate
         pass
+    yield User("username", "password", "email@email.com", "user_repo")
+    # TODO destroy socket
 
+def prepare(org, branch, user, push50_yaml):
+    """
+    Prepare git for pushing
+    Check that there are no permission errors
+    Add necessities to git config
+    Stage files
+    Stage files via lfs if necessary
+    Check that atleast one file is staged
+    """
     with ProgressBar("Preparing"):
         # TODO clone bare
             # TODO check for any permission errors: CS50.me / wrong username
@@ -76,11 +110,26 @@ def push(org, branch, sentinel = None):
         # TODO check that at least 1 file is staged
         pass
 
-    # TODO Submit50 special casing was here (academic honesty)
-
+def upload(branch, password):
+    """ Commit + push to branch """
     with ProgressBar("Uploading"):
+        # TODO decide on commit name
         # TODO commit + push
         pass
+
+def push(org, branch, sentinel = None):
+    check_announcements()
+    check_dependencies()
+
+    push50_yaml = connect(org, branch, sentinel)
+
+    with authenticate() as user:
+
+        prepare(org, branch, user, push50_yaml)
+
+        # TODO Submit50 special casing was here (academic honesty)
+
+        upload(branch, user)
 
 # example check50 call
 push("check50", "hello", sentinel = ".check50.yaml")
