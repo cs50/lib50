@@ -44,7 +44,7 @@ def connect(org, branch, sentinel = None):
     with ProgressBar("Connecting"):
         if sentinel:
             # ensure sentinel exists at org/repo/branch
-            _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".path50.yaml")
+            _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / str(sentinel))
 
         # ensure .push50.yaml exists at org/repo/branch
         push50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".path50.yaml")
@@ -158,7 +158,6 @@ class ProgressBar:
 
 def _parse_slug(slug):
     """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
-
     if slug.startswith("/") and slug.endswith("/"):
         raise Error(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(slug.strip("/"))))
     elif slug.startswith("/"):
@@ -172,11 +171,11 @@ def _parse_slug(slug):
 
 def _get_content_from(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
-    url = "https://github.com/{}/{}/raw/{}/{}/submit50/exclude".format(org, repo, branch, filepath)
-
     # TODO remove
-    # url = "https://github.com/cs50/checks/raw/master/cs50/2017/fall/caesar/submit50/exclude"
+    # org, repo, branch, filepath = "cs50", "problems2", "master", "hello/.push50.yaml"
 
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
+    print(url)
     r = requests.get(url)
     if not r.ok:
         raise Error(_("Invalid slug. Did you mean to submit something else?"))
@@ -184,4 +183,4 @@ def _get_content_from(org, repo, branch, filepath):
 
 if __name__ == "__main__":
     # example check50 call
-    push("check50", "hello", sentinel = ".check50.yaml")
+    push("check50", "cs50/problems2/master/hello", sentinel = ".check50.yaml")
