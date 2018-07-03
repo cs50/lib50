@@ -1,8 +1,12 @@
 import sys
 import time
 import requests
+import subprocess
+import re
 import contextlib
+import shutil
 from threading import Thread
+from distutils.version import StrictVersion
 
 class Error(Exception):
     pass
@@ -57,8 +61,15 @@ def check_announcements():
 
 def check_dependencies():
     """Check whether git >2.7 is installed"""
-    # TODO check for git 2.7
-    pass
+    # require git 2.7+, so that credential-cache--daemon ignores SIGHUP
+    # https://github.com/git/git/blob/v2.7.0/credential-cache--daemon.c
+    if not shutil.which("git"):
+        raise Error(_("You don't have git. Install git, then re-run!"))
+
+    version = subprocess.check_output(["git", "--version"]).decode("utf-8")
+    matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
+    if not matches or StrictVersion(matches.group(1)) < StrictVersion("2.7.0"):
+        raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
 def connect(org, branch, sentinel = None):
     """
