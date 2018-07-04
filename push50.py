@@ -35,27 +35,35 @@ def push(org, branch, sentinel = None):
 def connect(org, branch, sentinel = None):
     """
     Check version with submit50.io, raises Error if mismatch
-    Ensure .push50.yaml and sentinel exist, raises Error if does not exist
-    Check that all required files as per .push50.yaml are present
-    returns .push50.yaml
+    Ensure .cs50.yaml and sentinel exist, raises Error if does not exist
+    Check that all required files as per .cs50.yaml are present
+    returns .cs50.yaml
     """
 
-    problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(branch)
-
     with ProgressBar("Connecting"):
-        if sentinel:
-            # ensure sentinel exists at org/repo/branch
-            _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / str(sentinel))
+        problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(branch)
 
-        # ensure .push50.yaml exists at org/repo/branch
-        push50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".push50.yaml")
+        # get .cs50.yaml
+        cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".cs50.yaml")
+        cs50_yaml = yaml.safe_load(cs50_yaml_content)
 
-        # parse .push50.yaml
-        push50_yaml = yaml.safe_load(push50_yaml_content)
+        # ensure sentinel exists
+        if sentinel and sentinel not in cs50_yaml:
+            raise Error("Invalid slug for {}, did you mean something else?".format(sentinel))
 
-        # TODO check for missing files
+        # get .cs50.yaml from root if exists and merge with local
+        try:
+            root_cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, ".cs50.yaml")
+        except Error:
+            pass
+        else:
+            root_cs50_yaml = yaml.safe_load(root_cs50_yaml_content)
+            _merge_cs50_yaml(cs50_yaml, root_cs50_yaml)
 
-        return ".push50.yaml"
+        # check that all required files are present
+        _check_required(cs50_yaml)
+
+        return cs50_yaml
 
 @contextlib.contextmanager
 def authenticate():
@@ -126,7 +134,7 @@ class User:
         self.repo = repo
 
 class ProgressBar:
-    """Show a progress bar starting with message"""
+    """ Show a progress bar starting with message """
     def __init__(self, message):
         self._message = message
         self._progressing = True
@@ -209,6 +217,40 @@ def _get_content_from(org, repo, branch, filepath):
         raise Error(_("Invalid slug. Did you mean to submit something else?"))
     return r.content
 
+def _merge_cs50_yaml(cs50, root_cs50):
+    """ Merge .cs50.yaml with .cs50.yaml from root of repo """
+    merge_keys = [("check50", "requirements"),
+                  ("check50", "include"),
+                  ("check50", "required"),
+                  ("submit50", "include"),
+                  ("submit50", "required")]
+
+    for tool, key in merge_keys:
+        try:
+            items = cs50[tool].get(key, [])
+            items += root_cs50[tool][key]
+            cs50[tool][key] = items
+        except KeyError:
+            pass
+
+def _check_required(cs50_yaml):
+    """ Check that all required files are present """
+    try:
+        cs50_yaml["check50"]["required"]
+    except KeyError:
+        return
+
+    # TODO old submit50 had support for dirs, do we want that?
+
+    missing = [f for f in cs50_yaml["check50"]["required"] if not os.path.isfile(f)]
+
+    if missing:
+        msg = "{}\n{}\n{}".format(
+            _("You seem to be missing these files:"),
+            "\n".join(missing),
+            _("Ensure you have the required files before submitting."))
+        raise Error(msg)
+
 if __name__ == "__main__":
     # example check50 call
-    push("check50", "cs50/problems2/master/hello", sentinel = ".check50.yaml")
+    push("check50", "cs50/problems2/master/hello", sentinel = "check50")
