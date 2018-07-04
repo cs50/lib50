@@ -227,9 +227,7 @@ def _merge_cs50_yaml(cs50, root_cs50):
 
     for tool, key in merge_keys:
         try:
-            items = cs50[tool].get(key, [])
-            items += root_cs50[tool][key]
-            cs50[tool][key] = items
+            cs50[tool][key] = cs50[tool].get(key, []) + root_cs50[tool][key]
         except KeyError:
             pass
 
