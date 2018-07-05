@@ -1,25 +1,36 @@
-import os
-import sys
-import time
-import requests
-import subprocess
-import re
-import pathlib
+import collections
 import contextlib
-import shutil
+import copy
+import datetime
 import gettext
-import yaml
-import git
-import glob
+import itertools
+import logging
+import os
+from pathlib import Path
+import pkg_resources
+import re
+import shutil
+import subprocess
+import sys
 import tempfile
-from copy import deepcopy
-from threading import Thread
-from distutils.version import StrictVersion
+import threading
+import termios
+import time
+import tty
+
+import requests
+import pexpect
+from git import Git, GitError
+import yaml
+
+
+WORK_TREE = os.getcwd()
+GIT_DIR = tempfile.TemporaryDirectory()
+git = Git()(work_tree=WORK_TREE, git_dir=GIT_DIR.name)
 
 # Internationalization
-gettext.bindtextdomain("messages", os.path.join(sys.prefix, "submit50/locale"))
-gettext.textdomain("messages")
-_ = gettext.gettext
+gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
+
 
 def push(org, branch, tool):
     """ Push to github.com/org/repo=username/branch if tool exists """
@@ -27,7 +38,7 @@ def push(org, branch, tool):
 
     tool_yaml = connect(org, branch, tool)
 
-    with authenticate() as user:
+    with authenticate(org) as user:
 
         prepare(org, branch, user, tool_yaml)
 
@@ -69,16 +80,128 @@ def connect(org, branch, tool):
         return cs50_yaml[tool]
 
 @contextlib.contextmanager
-def authenticate():
+def file_buffer(contents):
+    with tempfile.TemporaryFile("r+") as f:
+        f.writelines(contents)
+        f.seek(0)
+        yield f
+
+
+
+
+
+def get_username(prompt="Username: "):
+    try:
+        return input(prompt).strip()
+    except EOFError:
+        print()
+
+
+def get_password(prompt="Password: "):
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setraw(fd)
+
+    print(prompt, end="", flush=True)
+    password = []
+    try:
+        while True:
+            ch = sys.stdin.buffer.read(1)[0]
+            if ch in (ord("\r"), ord("\n"), 4): # if user presses Enter or ctrl-d
+                print("\r")
+                break
+            elif ch == 127: # DEL
+                try:
+                    password.pop()
+                except ValueError:
+                    pass
+                print("\b \b", end="", flush=True)
+            elif ch == 3: # ctrl-c
+                print("^C", end="", flush=True)
+                raise KeyboardInterrupt
+            else:
+                password.append(ch)
+                print("*", end="", flush=True)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    return bytes(password).decode()
+
+
+@contextlib.contextmanager
+def authenticate(org):
     """
     Authenticate with GitHub via SSH if possible
     Otherwise authenticate via HTTPS
     returns: an authenticated User
     """
-    with ProgressBar("Authenticating"):
-        pass
-    yield User("username", "password", "email@email.com", "user_repo")
-    # TODO destroy socket
+    with ProgressBar("Authenticating") as progress_bar:
+    # Try SSH
+        # require ssh-agent
+        child = pexpect.spawn("ssh git@github.com", encoding="utf8")
+        # github prints 'Hi {username}!...' when attempting to get shell access
+        i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key", "Permission denied", "Are you sure you want to continue connecting"])
+        child.close()
+        if i == 0:
+            username = child.match.groups()[0]
+            yield User(name=username,
+                       password=None,
+                       email=f"{username}@users.noreply.github.com",
+                       repo=f"git@github.com/{org}/{username}")
+            return
+
+        # Else, authenticate via https, caching credentials
+        cache = Path("~/.git-credential-cache").expanduser()
+        cache.mkdir(mode=0o700, exist_ok=True)
+        socket = cache / "push50"
+        # import pdb; pdb.set_trace()
+        try:
+            child = pexpect.spawn(f"git -c credential.helper='cache --socket {socket}' credential fill", encoding="utf8")
+            child.sendline("")
+
+            i = child.expect(["Username:", "Password:", "username=([^\r]+)\r\npassword=([^\r]+)"])
+            if i == 2:
+                username, password = child.match.groups()
+            else:
+                username = password = None
+            child.close()
+
+            progress_bar.stop()
+            if not password:
+                username = get_username("Github username: ")
+                password = get_password("Github password: ")
+            res = requests.get("https://api.github.com/user", auth=(username, password))
+            # check for 2-factor authentication http://github3.readthedocs.io/en/develop/examples/oauth.html?highlight=token
+            if "X-GitHub-OTP" in res.headers:
+                raise Error("Looks like you have two-factor authentication enabled! Please generate a personal access token and use it as your password. See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
+            if res.status_code != 200:
+                logging.debug(res.headers)
+                logging.debug(res.text)
+                raise Error("Invalid username and/or password." if res.status_code == 401 else "Could not authenticate user.")
+
+            # canonicalize (capitalization of) username,
+            # especially if user logged in via email address
+            username = res.json()["login"]
+
+            timeout = int(datetime.timedelta(weeks=1).total_seconds())
+            print("foo")
+            with file_buffer([f"username={username}", f"password={password}"]) as f:
+                git(c=["credential.helper='cache --socket {socket} --timeout {timeout}",
+                       "credentialcache.ignoresighub=true"]).credential("approve", istream=f)
+            yield User(name=username,
+                       password=password,
+                       email=f"{username}@users.noreply.github.com",
+                       repo=f"https://{username}@github.com/{org}/{username}")
+
+        except:
+            git.credential_cache(exit, socket=socket)
+            try:
+                with file_buffer(["host=github.com", "protocol=https"]) as f:
+                    git.credential_osxkeychain("erase", istream=f)
+            except GitError:
+                pass
+            raise
+
 
 def prepare(org, branch, user, tool_yaml):
     """
@@ -102,8 +225,6 @@ def prepare(org, branch, user, tool_yaml):
                             "Double-check ~/.gitconfig and then log into https://cs50.me/ in a browser, "
                             "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
             raise e
-
-
         # TODO .gitattribute stuff
         # TODO git config
 
@@ -135,8 +256,9 @@ def check_dependencies():
     # check that git --version > 2.7
     version = subprocess.check_output(["git", "--version"]).decode("utf-8")
     matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
-    if not matches or StrictVersion(matches.group(1)) < StrictVersion("2.7.0"):
+    if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
+
 
 class Error(Exception):
     pass
@@ -144,47 +266,35 @@ class Error(Exception):
 class InvalidSlug(Error):
     pass
 
-class User:
-    def __init__(self, name, password, email, repo):
-        self.name = name
-        self.password = password
-        self.email = email
-        self.repo = repo
+User = collections.namedtuple("User", ["name", "password", "email", "repo"])
 
 class ProgressBar:
     """ Show a progress bar starting with message """
     def __init__(self, message):
         self._message = message
         self._progressing = True
-        self._paused = False
         self._thread = None
 
-    def pause(self):
-        """Pause the progress bar"""
-        self._paused = True
-
-    def unpause(self):
-        """Unpause the progress bar"""
-        self._paused = False
+    def stop(self):
+        """Stop the progress bar"""
+        if self._progressing:
+            self._progressing = False
+            self._thread.join()
 
     def __enter__(self):
         def progress_runner():
-            sys.stdout.write(self._message + "...")
-            sys.stdout.flush()
+            print(self._message + "...", end="", flush=True)
             while self._progressing:
-                if not self._paused:
-                    sys.stdout.write(".")
-                    sys.stdout.flush()
+                print(".", end="", flush=True)
                 time.sleep(0.5)
             print()
 
-        self._thread = Thread(target=progress_runner)
+        self._thread = threading.Thread(target=progress_runner)
         self._thread.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._progressing = False
-        self._thread.join()
+        self.stop()
 
 def _parse_slug(slug, offline=False):
     """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
@@ -225,7 +335,7 @@ def _parse_slug(slug, offline=False):
 
     branch, problem = parse_branch(offline)
 
-    return org, repo, branch, pathlib.Path(problem)
+    return org, repo, branch, Path(problem)
 
 def _get_content_from(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
@@ -237,7 +347,7 @@ def _get_content_from(org, repo, branch, filepath):
 
 def _merge_cs50_yaml(cs50, root_cs50):
     """ Merge .cs50.yaml with .cs50.yaml from root of repo """
-    result = deepcopy(root_cs50)
+    result = copy.deepcopy(root_cs50)
 
     for tool in cs50:
         if tool not in root_cs50:
@@ -261,7 +371,6 @@ def _check_required(tool_yaml):
         return
 
     # TODO old submit50 had support for dirs, do we want that?
-
     missing = [f for f in tool_yaml["required"] if not os.path.isfile(f)]
 
     if missing:
