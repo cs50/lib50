@@ -10,6 +10,7 @@ import shutil
 import gettext
 import yaml
 import git
+from copy import deepcopy
 from threading import Thread
 from distutils.version import StrictVersion
 
@@ -58,7 +59,7 @@ def connect(org, branch, sentinel = None):
             pass
         else:
             root_cs50_yaml = yaml.safe_load(root_cs50_yaml_content)
-            _merge_cs50_yaml(cs50_yaml, root_cs50_yaml)
+            cs50_yaml = _merge_cs50_yaml(cs50_yaml, root_cs50_yaml)
 
         # check that all required files are present
         _check_required(cs50_yaml)
@@ -219,17 +220,20 @@ def _get_content_from(org, repo, branch, filepath):
 
 def _merge_cs50_yaml(cs50, root_cs50):
     """ Merge .cs50.yaml with .cs50.yaml from root of repo """
-    merge_keys = [("check50", "requirements"),
-                  ("check50", "include"),
-                  ("check50", "required"),
-                  ("submit50", "include"),
-                  ("submit50", "required")]
+    result = deepcopy(root_cs50)
 
-    for tool, key in merge_keys:
-        try:
-            cs50[tool][key] = cs50[tool].get(key, []) + root_cs50[tool][key]
-        except KeyError:
-            pass
+    for tool in cs50:
+        if tool not in root_cs50:
+            result[tool] = cs50[tool]
+            continue
+
+        for key in cs50[tool]:
+            if key in root_cs50[tool] and isinstance(root_cs50[tool][key], list):
+                result[tool][key] += cs50[tool][key]
+            else:
+                result[tool][key] = cs50[tool][key]
+
+    return result
 
 def _check_required(cs50_yaml):
     """ Check that all required files are present """
