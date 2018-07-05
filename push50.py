@@ -20,7 +20,7 @@ gettext.textdomain("messages")
 _ = gettext.gettext
 
 def push(org, branch, tool):
-    """ Push to org/user/branch if sentinel exists """
+    """ Push to org/user/branch if tool exists """
     check_dependencies()
 
     push50_yaml = connect(org, branch, tool)
@@ -48,9 +48,9 @@ def connect(org, branch, tool):
         cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".cs50.yaml")
         cs50_yaml = yaml.safe_load(cs50_yaml_content)
 
-        # ensure sentinel exists
+        # ensure tool exists
         if tool not in cs50_yaml:
-            raise Error("Invalid slug for {}, did you mean something else?".format(sentinel))
+            raise Error("Invalid slug for {}, did you mean something else?".format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
