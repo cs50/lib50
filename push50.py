@@ -88,17 +88,16 @@ def authenticate(org):
     returns: an authenticated User
     """
     with ProgressBar("Authenticating") as progress_bar:
-    # Try SSH
+        # try authentication via SSH
         with _authenticate_ssl(org) as user:
             if user:
                 yield user
                 return
 
+        # else, authenticate via https, caching credentials
         progress_bar.stop()
         with _authenticate_https(org) as user:
             yield user
-
-        # Else, authenticate via https, caching credentials
 
 def prepare(org, branch, user, tool_yaml):
     """
@@ -372,18 +371,21 @@ def _authenticate_https(org):
 
 @contextlib.contextmanager
 def _file_buffer(contents):
+    """ Contextmanager that produces a temporary file with contents """
     with tempfile.TemporaryFile("r+") as f:
         f.writelines(contents)
         f.seek(0)
         yield f
 
 def _get_username(prompt="Username: "):
+    """ Prompt the user for username """
     try:
         return input(prompt).strip()
     except EOFError:
         print()
 
 def _get_password(prompt="Password: "):
+    """ Prompt the user for password """
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     tty.setraw(fd)
