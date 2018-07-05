@@ -10,6 +10,7 @@ import shutil
 import gettext
 import yaml
 import git
+import tempfile
 from copy import deepcopy
 from threading import Thread
 from distutils.version import StrictVersion
@@ -20,14 +21,14 @@ gettext.textdomain("messages")
 _ = gettext.gettext
 
 def push(org, branch, tool):
-    """ Push to org/user/branch if tool exists """
+    """ Push to github.com/org/repo=username/branch if tool exists """
     check_dependencies()
 
-    push50_yaml = connect(org, branch, tool)
+    tool_yaml = connect(org, branch, tool)
 
     with authenticate() as user:
 
-        prepare(org, branch, user, push50_yaml)
+        prepare(org, branch, user, tool_yaml)
 
         # TODO Submit50 special casing was here (academic honesty)
 
@@ -50,7 +51,7 @@ def connect(org, branch, tool):
 
         # ensure tool exists
         if tool not in cs50_yaml:
-            raise Error("Invalid slug for {}, did you mean something else?".format(tool))
+            raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
@@ -78,7 +79,7 @@ def authenticate():
     yield User("username", "password", "email@email.com", "user_repo")
     # TODO destroy socket
 
-def prepare(org, branch, user, push50_yaml):
+def prepare(org, branch, user, tool_yaml):
     """
     Prepare git for pushing
     Check that there are no permission errors
@@ -87,9 +88,21 @@ def prepare(org, branch, user, push50_yaml):
     Stage files via lfs if necessary
     Check that atleast one file is staged
     """
-    with ProgressBar("Preparing"):
-        # TODO clone bare
-            # TODO check for any permission errors: CS50.me / wrong username
+    with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
+        # clone just .git folder
+        try:
+            git.Repo.clone_from(user.repo, git_dir, bare=True)
+        except git.GitError:
+            if user.password:
+                e = Error(_("Looks like {} isn't enabled for your account yet. "
+                            "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
+            else:
+                e = Error(_("Looks like you have the wrong username in ~/.gitconfig or {} isn't yet enabled for your account. "
+                            "Double-check ~/.gitconfig and then log into https://cs50.me/ in a browser, "
+                            "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
+            raise e
+
+
         # TODO .gitattribute stuff
         # TODO git config
         # TODO add files to staging area
@@ -257,4 +270,4 @@ def _check_required(tool_yaml):
 
 if __name__ == "__main__":
     # example check50 call
-    push("check50", "cs50/problems2/master/hello", tool = "check50")
+    push("check50", "cs50/problems2/master/hello", "check50")

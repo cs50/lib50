@@ -28,4 +28,4 @@ def check_version():
 if __name__ == "__main__":
     check_announcements()
     check_version()
-    push50.push("submit50", "hello", sentinel=".submit50.yaml")
+    push50.push("submit50", "hello", "submit50")
