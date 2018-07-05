@@ -10,6 +10,7 @@ import shutil
 import gettext
 import yaml
 import git
+import glob
 import tempfile
 from copy import deepcopy
 from threading import Thread
@@ -105,6 +106,9 @@ def prepare(org, branch, user, tool_yaml):
 
         # TODO .gitattribute stuff
         # TODO git config
+
+        exclude = _convert_yaml_to_exclude(tool_yaml)
+
         # TODO add files to staging area
         # TODO git lfs
         # TODO check that at least 1 file is staged
@@ -247,7 +251,6 @@ def _merge_cs50_yaml(cs50, root_cs50):
                 result[tool][key] = result[tool][key] + cs50[tool][key]
             else:
                 result[tool][key] = cs50[tool][key]
-
     return result
 
 def _check_required(tool_yaml):
@@ -267,6 +270,24 @@ def _check_required(tool_yaml):
             "\n".join(missing),
             _("Ensure you have the required files before submitting."))
         raise Error(msg)
+
+def _convert_yaml_to_exclude(tool_yaml):
+    """
+    Create a git exclude file from include + required key as per the tool's yaml entry in .cs50.yaml
+        if no include key is given, all keys are included (exclude is empty)
+    Includes are globbed and matched files are explicitly added to the exclude file
+    """
+    if "include" not in tool_yaml:
+        return ""
+
+    includes = []
+    for include in tool_yaml["include"]:
+        includes += glob.glob(include)
+
+    if "required" in tool_yaml:
+        includes += [req for req in tool_yaml["required"] if req not in includes]
+
+    return "*" + "".join([f"\n!{i}" for i in includes])
 
 if __name__ == "__main__":
     # example check50 call
