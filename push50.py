@@ -89,15 +89,14 @@ def authenticate(org):
     """
     with ProgressBar("Authenticating") as progress_bar:
         # try authentication via SSH
-        with _authenticate_ssl(org) as user:
-            if user:
+        try:
+            with _authenticate_ssl(org) as user:
                 yield user
-                return
-
-        # else, authenticate via https, caching credentials
-        progress_bar.stop()
-        with _authenticate_https(org) as user:
-            yield user
+        except Error:
+            # else, authenticate via https, caching credentials
+            progress_bar.stop()
+            with _authenticate_https(org) as user:
+                yield user
 
 def prepare(org, branch, user, tool_yaml):
     """
@@ -296,7 +295,7 @@ def _convert_yaml_to_exclude(tool_yaml):
 
 @contextlib.contextmanager
 def _authenticate_ssl(org):
-    """ Try authenticating via SSL, if succesful yields a User else yields None """
+    """ Try authenticating via SSL, if succesful yields a User, otherwise raises Error """
     # require ssh-agent
     child = pexpect.spawn("ssh git@github.com", encoding="utf8")
     # github prints 'Hi {username}!...' when attempting to get shell access
@@ -309,7 +308,7 @@ def _authenticate_ssl(org):
                    email=f"{username}@users.noreply.github.com",
                    repo=f"git@github.com/{org}/{username}")
     else:
-        yield None
+        raise Error("Could not authenticate over SSH")
 
 @contextlib.contextmanager
 def _authenticate_https(org):
