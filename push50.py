@@ -19,11 +19,11 @@ gettext.bindtextdomain("messages", os.path.join(sys.prefix, "submit50/locale"))
 gettext.textdomain("messages")
 _ = gettext.gettext
 
-def push(org, branch, sentinel = None):
+def push(org, branch, tool):
     """ Push to org/user/branch if sentinel exists """
     check_dependencies()
 
-    push50_yaml = connect(org, branch, sentinel)
+    push50_yaml = connect(org, branch, tool)
 
     with authenticate() as user:
 
@@ -33,12 +33,12 @@ def push(org, branch, sentinel = None):
 
         upload(branch, user)
 
-def connect(org, branch, sentinel = None):
+def connect(org, branch, tool):
     """
     Check version with submit50.io, raises Error if mismatch
-    Ensure .cs50.yaml and sentinel exist, raises Error if does not exist
+    Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
-    returns .cs50.yaml
+    returns tool specific portion of .cs50.yaml
     """
 
     with ProgressBar("Connecting"):
@@ -49,7 +49,7 @@ def connect(org, branch, sentinel = None):
         cs50_yaml = yaml.safe_load(cs50_yaml_content)
 
         # ensure sentinel exists
-        if sentinel and sentinel not in cs50_yaml:
+        if tool not in cs50_yaml:
             raise Error("Invalid slug for {}, did you mean something else?".format(sentinel))
 
         # get .cs50.yaml from root if exists and merge with local
@@ -62,9 +62,9 @@ def connect(org, branch, sentinel = None):
             cs50_yaml = _merge_cs50_yaml(cs50_yaml, root_cs50_yaml)
 
         # check that all required files are present
-        _check_required(cs50_yaml)
+        _check_required(cs50_yaml[tool])
 
-        return cs50_yaml
+        return cs50_yaml[tool]
 
 @contextlib.contextmanager
 def authenticate():
@@ -229,22 +229,24 @@ def _merge_cs50_yaml(cs50, root_cs50):
 
         for key in cs50[tool]:
             if key in root_cs50[tool] and isinstance(root_cs50[tool][key], list):
-                result[tool][key] += cs50[tool][key]
+                # Note: References in .yaml become actual Python references once parsed
+                # Cannot use += here!
+                result[tool][key] = result[tool][key] + cs50[tool][key]
             else:
                 result[tool][key] = cs50[tool][key]
 
     return result
 
-def _check_required(cs50_yaml):
+def _check_required(tool_yaml):
     """ Check that all required files are present """
     try:
-        cs50_yaml["check50"]["required"]
+        tool_yaml["required"]
     except KeyError:
         return
 
     # TODO old submit50 had support for dirs, do we want that?
 
-    missing = [f for f in cs50_yaml["check50"]["required"] if not os.path.isfile(f)]
+    missing = [f for f in tool_yaml["required"] if not os.path.isfile(f)]
 
     if missing:
         msg = "{}\n{}\n{}".format(
@@ -255,4 +257,4 @@ def _check_required(cs50_yaml):
 
 if __name__ == "__main__":
     # example check50 call
-    push("check50", "cs50/problems2/master/hello", sentinel = "check50")
+    push("check50", "cs50/problems2/master/hello", tool = "check50")
