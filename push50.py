@@ -21,13 +21,11 @@ import glob
 
 import requests
 import pexpect
-from git import Git, GitError, Repo
+from git import Git, GitError
 import yaml
 
-
 WORK_TREE = os.getcwd()
-GIT_DIR = tempfile.TemporaryDirectory()
-git = Git()(work_tree=WORK_TREE, git_dir=GIT_DIR.name)
+git = Git()(work_tree=WORK_TREE)
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
@@ -110,7 +108,7 @@ def prepare(org, branch, user, tool_yaml):
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
         # clone just .git folder
         try:
-            Repo.clone_from(user.repo, git_dir, bare=True)
+            git.clone(user.repo, git_dir, bare=True)
         except GitError:
             if user.password:
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
@@ -400,9 +398,10 @@ def _get_password(prompt="Password: "):
             elif ch == 127: # DEL
                 try:
                     password.pop()
-                except ValueError:
+                except IndexError:
                     pass
-                print("\b \b", end="", flush=True)
+                else:
+                    print("\b \b", end="", flush=True)
             elif ch == 3: # ctrl-c
                 print("^C", end="", flush=True)
                 raise KeyboardInterrupt
