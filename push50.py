@@ -21,7 +21,7 @@ import glob
 
 import requests
 import pexpect
-from git import Git, GitError
+from git import Git, GitError, Repo
 import yaml
 
 WORK_TREE = os.getcwd()
