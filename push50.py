@@ -25,7 +25,6 @@ from git import Git, GitError, Repo, SymbolicReference
 import yaml
 
 WORK_TREE = os.getcwd()
-git = Git()(work_tree=WORK_TREE)
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
@@ -52,7 +51,6 @@ def connect(org, branch, tool):
     Check that all required files as per .cs50.yaml are present
     returns tool specific portion of .cs50.yaml
     """
-
     with ProgressBar("Connecting"):
         problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(branch)
 
@@ -106,9 +104,11 @@ def prepare(org, branch, user, tool_yaml):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
+        #git_dir = ".git"
+        git = lambda : Git()(git_dir=git_dir, work_tree=WORK_TREE)
         # clone just .git folder
         try:
-            git.clone(user.repo, git_dir, bare=True)
+            git().clone(user.repo, git_dir, bare=True)
         except GitError:
             if user.password:
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
@@ -132,12 +132,25 @@ def prepare(org, branch, user, tool_yaml):
 
         # add exclude file
         exclude = _convert_yaml_to_exclude(tool_yaml)
-        exclude_path = f"{git_dir}/EXCLUDE"
+        exclude_path = f"{git_dir}/info/exclude"
         with open(exclude_path, "w") as f:
-            f.write(exclude)
+            f.write(exclude + "\n")
+            f.write(".git*\n")
+            f.write(".lfs*\n")
+
         config.set_value("core", "excludesFile", exclude_path)
+        config.release()
 
         # TODO add files to staging area
+
+        # adds, modifies, and removes index entries to match the working tree
+        # TODO WTF README.md?
+        git().add(all=True)
+
+        # get file lists
+        files = git().ls_files()
+        excluded_files = git().ls_files(other=True)
+
         # TODO git lfs
         # TODO check that at least 1 file is staged
         pass
@@ -205,6 +218,8 @@ class ProgressBar:
 
 def _parse_slug(slug, offline=False):
     """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
+    git = Git()
+
     if slug.startswith("/") and slug.endswith("/"):
         raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(slug.strip("/"))))
     elif slug.startswith("/"):
@@ -325,6 +340,8 @@ def _authenticate_ssh(org):
 @contextlib.contextmanager
 def _authenticate_https(org):
     """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
+    git = Git()
+
     cache = Path("~/.git-credential-cache").expanduser()
     cache.mkdir(mode=0o700, exist_ok=True)
     socket = cache / "push50"
