@@ -18,31 +18,28 @@ import termios
 import time
 import tty
 import glob
-
 import requests
 import pexpect
 from git import Git, GitError, Repo, SymbolicReference
 import yaml
 
-WORK_TREE = os.getcwd()
+#Git.GIT_PYTHON_TRACE = 1
+#logging.basicConfig(level="INFO")
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
 
 
-def push(org, branch, tool):
+def push(org, branch, tool, prompt = (lambda included, excluded : True)):
     """ Push to github.com/org/repo=username/branch if tool exists """
     check_dependencies()
 
     tool_yaml = connect(org, branch, tool)
 
     with authenticate(org) as user:
-
-        prepare(org, branch, user, tool_yaml)
-
-        # TODO Submit50 special casing was here (academic honesty)
-
-        upload(branch, user)
+        with prepare(org, branch, user, tool_yaml) as repository:
+            if prompt(repository.included, repository.excluded):
+                upload(repository, branch)
 
 def connect(org, branch, tool):
     """
@@ -94,6 +91,7 @@ def authenticate(org):
             with _authenticate_https(org) as user:
                 yield user
 
+@contextlib.contextmanager
 def prepare(org, branch, user, tool_yaml):
     """
     Prepare git for pushing
@@ -104,8 +102,8 @@ def prepare(org, branch, user, tool_yaml):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        #git_dir = ".git"
-        git = lambda : Git()(git_dir=git_dir, work_tree=WORK_TREE)
+        git = lambda : Git()(git_dir=git_dir, work_tree=os.getcwd())
+
         # clone just .git folder
         try:
             git().clone(user.repo, git_dir, bare=True)
@@ -127,8 +125,8 @@ def prepare(org, branch, user, tool_yaml):
         config.set_value("user", "email", user.email)
         config.set_value("user", "name", user.name)
 
-        # have branch refer to HEAD # TODO why?!
-        SymbolicReference.create(repo, f"refs/heads/{branch}", reference="HEAD")
+        # switch to branch without checkout
+        git().symbolic_ref("HEAD", f"refs/heads/{branch}")
 
         # add exclude file
         exclude = _convert_yaml_to_exclude(tool_yaml)
@@ -137,30 +135,36 @@ def prepare(org, branch, user, tool_yaml):
             f.write(exclude + "\n")
             f.write(".git*\n")
             f.write(".lfs*\n")
-
         config.set_value("core", "excludesFile", exclude_path)
         config.release()
 
-        # TODO add files to staging area
-
-        # adds, modifies, and removes index entries to match the working tree
-        # TODO WTF README.md?
+        # add files to staging area
         git().add(all=True)
 
         # get file lists
-        files = git().ls_files()
-        excluded_files = git().ls_files(other=True)
+        files = git().ls_files().split("\n")
+        excluded_files = git().ls_files(other=True).split("\n")
 
         # TODO git lfs
-        # TODO check that at least 1 file is staged
-        pass
 
-def upload(branch, password):
+        # check that at least 1 file is staged
+        if not files:
+            raise Error(_("No files in this directory are expected for submission."))
+
+        progress_bar.stop()
+        yield Repository(git, files, excluded_files)
+
+def upload(repository, branch):
     """ Commit + push to branch """
     with ProgressBar("Uploading"):
-        # TODO decide on commit name
-        # TODO commit + push
-        pass
+        # decide on commit name
+        headers = requests.get("https://api.github.com/").headers
+        commit_name = datetime.datetime.strptime(headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+        commit_name = commit_name.strftime("%Y%m%dT%H%M%SZ")
+
+        # commit + push
+        repository.git().commit(message=commit_name, allow_empty=True)
+        repository.git().push("origin", branch)
 
 def check_dependencies():
     """
@@ -187,6 +191,7 @@ class InvalidSlug(Error):
     pass
 
 User = collections.namedtuple("User", ["name", "password", "email", "repo"])
+Repository = collections.namedtuple("Repository", ["git", "included", "excluded"])
 
 class ProgressBar:
     """ Show a progress bar starting with message """
@@ -444,7 +449,34 @@ def _get_password(prompt="Password: "):
 
     return bytes(password).decode()
 
-
+# TODO remove
 if __name__ == "__main__":
+    # example check50/submit50 call
+    
+    def cprint(text="", color=None, on_color=None, attrs=None, **kwargs):
+        """Colorizes text (and wraps to terminal's width)."""
+        import termcolor
+        import textwrap
+
+        columns = 80  # because get_terminal_size's default fallback doesn't work in pipes
+
+        # print text
+        termcolor.cprint(textwrap.fill(text, columns, drop_whitespace=False),
+                         color=color, on_color=on_color, attrs=attrs, **kwargs)
+
     # example check50 call
-    push("check50", "cs50/problems2/master/hello", "check50")
+    def prompt(included, excluded):
+        if included:
+            cprint(_("Files that will be submitted:"), "green")
+            for file in included:
+                cprint("./{}".format(file), "green")
+
+        # files that won't be submitted
+        if excluded:
+            cprint(_("Files that won't be submitted:"), "yellow")
+            for other in excluded:
+                cprint("./{}".format(other), "yellow")
+
+        return True
+
+    push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
