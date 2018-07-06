@@ -21,7 +21,7 @@ import glob
 
 import requests
 import pexpect
-from git import Git, GitError, Repo
+from git import Git, GitError, Repo, SymbolicReference
 import yaml
 
 WORK_TREE = os.getcwd()
@@ -88,7 +88,7 @@ def authenticate(org):
     with ProgressBar("Authenticating") as progress_bar:
         # try authentication via SSH
         try:
-            with _authenticate_ssl(org) as user:
+            with _authenticate_ssh(org) as user:
                 yield user
         except Error:
             # else, authenticate via https, caching credentials
@@ -118,10 +118,24 @@ def prepare(org, branch, user, tool_yaml):
                             "Double-check ~/.gitconfig and then log into https://cs50.me/ in a browser, "
                             "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
             raise e
-        # TODO .gitattribute stuff
-        # TODO git config
 
+        # TODO .gitattribute stuff
+
+        # set user name/email in repo config
+        repo = Repo(git_dir)
+        config = repo.config_writer()
+        config.set_value("user", "email", user.email)
+        config.set_value("user", "name", user.name)
+
+        # have branch refer to HEAD # TODO why?!
+        SymbolicReference.create(repo, f"refs/heads/{branch}", reference="HEAD")
+
+        # add exclude file
         exclude = _convert_yaml_to_exclude(tool_yaml)
+        exclude_path = f"{git_dir}/EXCLUDE"
+        with open(exclude_path, "w") as f:
+            f.write(exclude)
+        config.set_value("core", "excludesFile", exclude_path)
 
         # TODO add files to staging area
         # TODO git lfs
@@ -292,8 +306,8 @@ def _convert_yaml_to_exclude(tool_yaml):
     return "*" + "".join([f"\n!{i}" for i in includes])
 
 @contextlib.contextmanager
-def _authenticate_ssl(org):
-    """ Try authenticating via SSL, if succesful yields a User, otherwise raises Error """
+def _authenticate_ssh(org):
+    """ Try authenticating via ssh, if succesful yields a User, otherwise raises Error """
     # require ssh-agent
     child = pexpect.spawn("ssh git@github.com", encoding="utf8")
     # github prints 'Hi {username}!...' when attempting to get shell access
