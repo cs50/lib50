@@ -25,7 +25,7 @@ from git import Git, GitError, Repo, SymbolicReference, NoSuchPathError
 from pathlib import Path
 
 #Git.GIT_PYTHON_TRACE = 1
-logging.basicConfig(level="DEBUG")
+#logging.basicConfig(level="DEBUG")
 
 LOCAL_PATH = "~/.local/share/push50"
 #LOCAL_PATH = "test"
@@ -50,7 +50,6 @@ def local(slug, update=True):
     Returns path to local copy
     """
     org, repo, branch, _ = _parse_slug(slug)
-    print(org, repo, branch)
 
     local_path = Path(LOCAL_PATH) / org / repo
 
