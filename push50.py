@@ -21,11 +21,11 @@ import requests
 import pexpect
 import shlex
 import yaml
-from git import Git, GitError, Repo, SymbolicReference
+from git import Git, GitError, Repo, SymbolicReference, NoSuchPathError
 from pathlib import Path
 
 #Git.GIT_PYTHON_TRACE = 1
-#logging.basicConfig(level="DEBUG")
+logging.basicConfig(level="DEBUG")
 
 LOCAL_PATH = "~/.local/share/push50"
 #LOCAL_PATH = "test"
@@ -33,26 +33,30 @@ LOCAL_PATH = "~/.local/share/push50"
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
 
-def push(org, branch, tool, prompt = (lambda included, excluded : True)):
-    """ Push to github.com/org/repo=username/branch if tool exists """
+def push(org, slug, tool, prompt = (lambda included, excluded : True)):
+    """ Push to github.com/org/repo=username/slug if tool exists """
     check_dependencies()
 
-    tool_yaml = connect(org, branch, tool)
+    tool_yaml = connect(org, slug, tool)
 
     with authenticate(org) as user:
-        with prepare(org, branch, user, tool_yaml) as repository:
+        with prepare(org, slug, user, tool_yaml) as repository:
             if prompt(repository.included, repository.excluded):
-                upload(repository, branch, user)
+                upload(repository, slug, user)
 
-def local(org, repo, branch, update=True):
+def local(slug, update=True):
     """
     Create/update local copy of github.com/org/repo/branch
     Returns path to local copy
     """
+    org, repo, branch, _ = _parse_slug(slug)
+    print(org, repo, branch)
+
     local_path = Path(LOCAL_PATH) / org / repo
-    git = lambda command : f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
 
     if local_path.exists():
+        git = lambda command : f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
+
         # switch to branch
         _run(git(f"checkout {branch}"))
 
@@ -61,18 +65,18 @@ def local(org, repo, branch, update=True):
             _run(git("pull"))
     else:
         # clone repo to local_path
-        _run(git(f"clone -b {branch} https://github.com/{org}/{repo} {local_path}"))
+        _run(f"git clone -b {branch} https://github.com/{org}/{repo} {local_path}")
 
     return local_path.absolute()
 
-def connect(org, branch, tool):
+def connect(org, slug, tool):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
     returns tool specific portion of .cs50.yaml
     """
     with ProgressBar("Connecting"):
-        problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(branch)
+        problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(slug)
 
         # get .cs50.yaml
         cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".cs50.yaml")
@@ -300,32 +304,35 @@ def _parse_slug(slug, offline=False):
     if idx == -1:
         raise InvalidSlug(slug)
 
+    # split slug in <org>/<repo>/<remainder>
     remainder = slug[idx+1:]
     org = slug.split("/")[0]
     repo = slug.split("/")[1]
 
-    def parse_branch(offline):
+    # get branches of <org>/<repo>
+    def get_branches(offline):
         try:
-            if not offline:
-                try:
-                    return parse_branch(offline=True)
-                except InvalidSlug:
-                    branches = (line.split("\t")[1].replace("refs/heads/", "")
-                                for line in git.ls_remote(f"https://github.com/{org}/{repo}", heads=True).split("\n"))
+            if offline:
+                return map(str, Repo(f"{str(LOCAL_PATH)}/{org}/{repo}").branches)
             else:
-                branches = map(str, Repo(f"~/.local/share/push50/{org}/{repo}").branches)
-        except GitError:
-            raise InvalidSlug(slug)
+                return (line.split("\t")[1].replace("refs/heads/", "")
+                        for line in git.ls_remote(f"https://github.com/{org}/{repo}", heads=True).split("\n"))
+        except (GitError, NoSuchPathError):
+            return []
 
-        for branch in branches:
-            if remainder.startswith(f"{branch}/"):
-                return branch, remainder[len(branch)+1:]
-        else:
-            raise InvalidSlug(slug)
+    # attempts to make at fetching branches
+    attempts = [lambda : get_branches(offline=True)]
+    if not offline:
+        attempts.append(lambda : get_branches(offline=False))
 
-    branch, problem = parse_branch(offline)
+    # try to get branches
+    for attempt in attempts:
+        # find a matching branch
+        for branch in attempt():
+            if remainder.startswith(f"{branch}"):
+                return org, repo, branch, Path(remainder[len(branch)+1:])
 
-    return org, repo, branch, Path(problem)
+    raise InvalidSlug(slug)
 
 def _get_content_from(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
@@ -543,4 +550,4 @@ if __name__ == "__main__":
         return True
 
     push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
-    #print(local("cs50", "problems2", "master"))
+    #print(local("cs50/problems2/foo"))
