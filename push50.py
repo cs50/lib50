@@ -20,11 +20,12 @@ import tty
 import glob
 import requests
 import pexpect
+import shlex
 from git import Git, GitError, Repo, SymbolicReference
 import yaml
 
 #Git.GIT_PYTHON_TRACE = 1
-#logging.basicConfig(level="INFO")
+logging.basicConfig(level="INFO")
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
@@ -39,7 +40,7 @@ def push(org, branch, tool, prompt = (lambda included, excluded : True)):
     with authenticate(org) as user:
         with prepare(org, branch, user, tool_yaml) as repository:
             if prompt(repository.included, repository.excluded):
-                upload(repository, branch)
+                upload(repository, branch, user)
 
 def connect(org, branch, tool):
     """
@@ -102,12 +103,12 @@ def prepare(org, branch, user, tool_yaml):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        git = lambda : Git()(git_dir=git_dir, work_tree=os.getcwd())
+        git = lambda command : f"git --git-dir={git_dir} --work-tree={os.getcwd()} {command}"
 
         # clone just .git folder
         try:
-            git().clone(user.repo, git_dir, bare=True)
-        except GitError:
+            _run(git(f"clone --bare {user.repo} {git_dir}"), stdin=[user.password])
+        except Error:
             if user.password:
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
                             "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
@@ -120,13 +121,11 @@ def prepare(org, branch, user, tool_yaml):
         # TODO .gitattribute stuff
 
         # set user name/email in repo config
-        repo = Repo(git_dir)
-        config = repo.config_writer()
-        config.set_value("user", "email", user.email)
-        config.set_value("user", "name", user.name)
+        _run(git(f"config user.email {shlex.quote(user.email)}"))
+        _run(git(f"config user.name {shlex.quote(user.name)}"))
 
         # switch to branch without checkout
-        git().symbolic_ref("HEAD", f"refs/heads/{branch}")
+        _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
         # add exclude file
         exclude = _convert_yaml_to_exclude(tool_yaml)
@@ -135,15 +134,14 @@ def prepare(org, branch, user, tool_yaml):
             f.write(exclude + "\n")
             f.write(".git*\n")
             f.write(".lfs*\n")
-        config.set_value("core", "excludesFile", exclude_path)
-        config.release()
+        _run(git(f"config core.excludesFile {exclude_path}"))
 
         # add files to staging area
-        git().add(all=True)
+        _run(git("add --all"))
 
         # get file lists
-        files = git().ls_files().split("\n")
-        excluded_files = git().ls_files(other=True).split("\n")
+        files = _run(git("ls-files")).split("\n")
+        excluded_files = _run(git("ls-files --other")).split("\n")
 
         # TODO git lfs
 
@@ -154,17 +152,17 @@ def prepare(org, branch, user, tool_yaml):
         progress_bar.stop()
         yield Repository(git, files, excluded_files)
 
-def upload(repository, branch):
+def upload(repository, branch, user):
     """ Commit + push to branch """
     with ProgressBar("Uploading"):
-        # decide on commit name
+        # decide on commit message
         headers = requests.get("https://api.github.com/").headers
-        commit_name = datetime.datetime.strptime(headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
-        commit_name = commit_name.strftime("%Y%m%dT%H%M%SZ")
+        commit_message = datetime.datetime.strptime(headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+        commit_message = commit_message.strftime("%Y%m%dT%H%M%SZ")
 
         # commit + push
-        repository.git().commit(message=commit_name, allow_empty=True)
-        repository.git().push("origin", branch)
+        _run(repository.git(f"commit -m {commit_message} --allow-empty"))
+        _run(repository.git(f"push origin {branch}"), stdin=user.password)
 
 def check_dependencies():
     """
@@ -182,7 +180,6 @@ def check_dependencies():
     matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
     if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
-
 
 class Error(Exception):
     pass
@@ -220,6 +217,50 @@ class ProgressBar:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+
+class _StreamToLogger:
+    def __init__(self, log):
+        self._log = log
+
+    def write(self, message):
+        if message != '\n':
+            self._log(message)
+
+    def flush(self):
+        pass
+
+def _run(command, stdin=tuple(), timeout=None):
+    """ Run a command, send stdin to command, returns command output """
+
+    # log command
+    logging.debug(command)
+
+    # spawn command
+    child = pexpect.spawnu(
+        command,
+        encoding="utf-8",
+        cwd=os.getcwd(),
+        env=dict(os.environ),
+        ignore_sighup=True,
+        timeout=timeout)
+
+    # log command output
+    child.logfile_read = _StreamToLogger(logging.debug)
+
+    # send stdin
+    for line in stdin:
+        child.sendline(line)
+
+    # read output, close process
+    command_output = child.read().strip()
+    child.close()
+
+    # check that command exited correctly
+    if child.signalstatus is None and child.exitstatus != 0:
+        logging.debug("git exited with {}".format(child.exitstatus))
+        raise Error()
+
+    return command_output
 
 def _parse_slug(slug, offline=False):
     """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
@@ -452,7 +493,7 @@ def _get_password(prompt="Password: "):
 # TODO remove
 if __name__ == "__main__":
     # example check50/submit50 call
-    
+
     def cprint(text="", color=None, on_color=None, attrs=None, **kwargs):
         """Colorizes text (and wraps to terminal's width)."""
         import termcolor
