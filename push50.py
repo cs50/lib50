@@ -6,7 +6,6 @@ import gettext
 import itertools
 import logging
 import os
-from pathlib import Path
 import pkg_resources
 import re
 import shutil
@@ -21,15 +20,18 @@ import glob
 import requests
 import pexpect
 import shlex
-from git import Git, GitError, Repo, SymbolicReference
 import yaml
+from git import Git, GitError, Repo, SymbolicReference
+from pathlib import Path
 
 #Git.GIT_PYTHON_TRACE = 1
-logging.basicConfig(level="INFO")
+#logging.basicConfig(level="DEBUG")
+
+LOCAL_PATH = "~/.local/share/push50"
+#LOCAL_PATH = "test"
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
-
 
 def push(org, branch, tool, prompt = (lambda included, excluded : True)):
     """ Push to github.com/org/repo=username/branch if tool exists """
@@ -42,9 +44,29 @@ def push(org, branch, tool, prompt = (lambda included, excluded : True)):
             if prompt(repository.included, repository.excluded):
                 upload(repository, branch, user)
 
+def local(org, repo, branch, update=True):
+    """
+    Create/update local copy of github.com/org/repo/branch
+    Returns path to local copy
+    """
+    local_path = Path(LOCAL_PATH) / org / repo
+    git = lambda command : f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
+
+    if local_path.exists():
+        # switch to branch
+        _run(git(f"checkout {branch}"))
+
+        # pull new commits if update=True
+        if update:
+            _run(git("pull"))
+    else:
+        # clone repo to local_path
+        _run(git(f"clone -b {branch} https://github.com/{org}/{repo} {local_path}"))
+
+    return local_path.absolute()
+
 def connect(org, branch, tool):
     """
-    Check version with submit50.io, raises Error if mismatch
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
     returns tool specific portion of .cs50.yaml
@@ -521,3 +543,4 @@ if __name__ == "__main__":
         return True
 
     push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
+    #print(local("cs50", "problems2", "master"))
