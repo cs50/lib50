@@ -319,17 +319,10 @@ def _parse_slug(slug, offline=False):
         except (GitError, NoSuchPathError):
             return []
 
-    # attempts to make at fetching branches
-    attempts = [lambda : get_branches(offline=True)]
-    if not offline:
-        attempts.append(lambda : get_branches(offline=False))
-
-    # try to get branches
-    for attempt in attempts:
-        # find a matching branch
-        for branch in attempt():
-            if remainder.startswith(f"{branch}"):
-                return org, repo, branch, Path(remainder[len(branch)+1:])
+    # find a matching branch
+    for branch in get_branches(offline):
+        if remainder.startswith(f"{branch}"):
+            return org, repo, branch, Path(remainder[len(branch)+1:])
 
     raise InvalidSlug(slug)
 
