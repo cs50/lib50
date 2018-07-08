@@ -28,7 +28,6 @@ from pathlib import Path
 #logging.basicConfig(level="DEBUG")
 
 LOCAL_PATH = "~/.local/share/push50"
-#LOCAL_PATH = "test"
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
@@ -37,67 +36,95 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
     """ Push to github.com/org/repo=username/slug if tool exists """
     check_dependencies()
 
-    tool_yaml = connect(org, slug, tool)
+    tool_yaml = connect(slug, tool)
 
     with authenticate(org) as user:
         with prepare(org, slug, user, tool_yaml) as repository:
             if prompt(repository.included, repository.excluded):
                 upload(repository, slug, user)
 
-def local(slug, update=True):
+def local(slug, tool, update=True):
     """
     Create/update local copy of github.com/org/repo/branch
-    Returns path to local copy
+    Returns path to local copy + tool_yaml
     """
-    org, repo, branch, _ = _parse_slug(slug)
+    # parse slug
+    if update:
+        slug = Slug(slug)
+    else:
+        try:
+            slug = Slug(slug, offline=True)
+        except InvalidSlug:
+            slug = Slug(slug)
 
-    local_path = Path(LOCAL_PATH) / org / repo
+    local_path = Path(LOCAL_PATH) / slug.org / slug.repo
 
     if local_path.exists():
         git = lambda command : f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
 
         # switch to branch
-        _run(git(f"checkout {branch}"))
+        _run(git(f"checkout {slug.branch}"))
 
         # pull new commits if update=True
         if update:
             _run(git("pull"))
     else:
         # clone repo to local_path
-        _run(f"git clone -b {branch} https://github.com/{org}/{repo} {local_path}")
+        _run(f"git clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}")
 
-    return local_path.absolute()
+    problem_path = (local_path / slug.problem).absolute()
 
-def connect(org, slug, tool):
+    # get tool_yaml
+    with open(problem_path / ".cs50.yaml", "r") as f:
+        try:
+            tool_yaml = yaml.safe_load(f.read())[tool]
+        except KeyError:
+            raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+
+    # if problem is not referencing root of repo
+    if slug.problem != Path("."):
+        # merge root .cs50.yaml with local .cs50.yaml
+        try:
+            with open(local_path / ".cs50.yaml", "r") as f:
+                root_yaml = yaml.safe_load(f.read())[tool]
+        except (FileNotFoundError, KeyError):
+            pass
+        else:
+            tool_yaml = _merge_tool_yaml(tool_yaml, root_yaml)
+
+    return problem_path, tool_yaml
+
+def connect(slug, tool):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
     returns tool specific portion of .cs50.yaml
     """
     with ProgressBar("Connecting"):
-        problem_org, problem_repo, problem_branch, problem_dir = _parse_slug(slug)
+        # parse slug
+        slug = Slug(slug)
 
         # get .cs50.yaml
-        cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, problem_dir / ".cs50.yaml")
-        cs50_yaml = yaml.safe_load(cs50_yaml_content)
+        cs50_yaml= yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))
 
         # ensure tool exists
-        if tool not in cs50_yaml:
+        try:
+            tool_yaml = cs50_yaml[tool]
+        except KeyError:
             raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
-            root_cs50_yaml_content = _get_content_from(problem_org, problem_repo, problem_branch, ".cs50.yaml")
-        except Error:
+            root_yaml = yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
+        except (Error, KeyError):
             pass
         else:
-            root_cs50_yaml = yaml.safe_load(root_cs50_yaml_content)
-            cs50_yaml = _merge_cs50_yaml(cs50_yaml, root_cs50_yaml)
+            tool_yaml = _merge_tool_yaml(tool_yaml, root_yaml)
 
         # check that all required files are present
-        _check_required(cs50_yaml[tool])
+        _check_required(tool_yaml)
 
-        return cs50_yaml[tool]
+        return tool_yaml
 
 @contextlib.contextmanager
 def authenticate(org):
@@ -215,6 +242,54 @@ class InvalidSlug(Error):
 User = collections.namedtuple("User", ["name", "password", "email", "repo"])
 Repository = collections.namedtuple("Repository", ["git", "included", "excluded"])
 
+class Slug:
+    def __init__(self, slug, offline=False):
+        """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
+        self.slug = slug
+        self.offline = offline
+
+        # assert begin/end of slug are correct
+        self._check_endings()
+
+        # Find third "/" in identifier
+        idx = slug.find("/", slug.find("/") + 1)
+        if idx == -1:
+            raise InvalidSlug(slug)
+
+        # split slug in <org>/<repo>/<remainder>
+        remainder = slug[idx+1:]
+        self.org, self.repo = slug.split("/")[:2]
+
+        # find a matching branch
+        for branch in self._get_branches():
+            if remainder.startswith(f"{branch}"):
+                self.branch = branch
+                self.problem = Path(remainder[len(branch)+1:])
+                break
+        else:
+            raise InvalidSlug(slug)
+
+    def _check_endings(self):
+        """ check begin/end of slug, raises InvalidSlug if malformed """
+        if self.slug.startswith("/") and self.slug.endswith("/"):
+            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
+        elif self.slug.startswith("/"):
+            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
+        elif self.slug.endswith("/"):
+            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
+
+    def _get_branches(self):
+        """ get branches from org/repo """
+        try:
+            if self.offline:
+                return map(str, Repo(f"{str(LOCAL_PATH)}/{self.org}/{self.repo}").branches)
+            else:
+                return (line.split("\t")[1].replace("refs/heads/", "")
+                        for line in Git().ls_remote(f"https://github.com/{self.org}/{self.repo}", heads=True).split("\n"))
+        except (GitError, NoSuchPathError):
+            return []
+
+
 class ProgressBar:
     """ Show a progress bar starting with message """
     def __init__(self, message):
@@ -287,45 +362,6 @@ def _run(command, stdin=tuple(), timeout=None):
 
     return command_output
 
-def _parse_slug(slug, offline=False):
-    """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
-    git = Git()
-
-    if slug.startswith("/") and slug.endswith("/"):
-        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(slug.strip("/"))))
-    elif slug.startswith("/"):
-        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading slash?".format(slug.strip("/"))))
-    elif slug.endswith("/"):
-        raise InvalidSlug(_("Invalid slug. Did you mean {}, without the trailing slash?".format(slug.strip("/"))))
-
-    # Find third "/" in identifier
-    idx = slug.find("/", slug.find("/") + 1)
-    if idx == -1:
-        raise InvalidSlug(slug)
-
-    # split slug in <org>/<repo>/<remainder>
-    remainder = slug[idx+1:]
-    org = slug.split("/")[0]
-    repo = slug.split("/")[1]
-
-    # get branches of <org>/<repo>
-    def get_branches(offline):
-        try:
-            if offline:
-                return map(str, Repo(f"{str(LOCAL_PATH)}/{org}/{repo}").branches)
-            else:
-                return (line.split("\t")[1].replace("refs/heads/", "")
-                        for line in git.ls_remote(f"https://github.com/{org}/{repo}", heads=True).split("\n"))
-        except (GitError, NoSuchPathError):
-            return []
-
-    # find a matching branch
-    for branch in get_branches(offline):
-        if remainder.startswith(f"{branch}"):
-            return org, repo, branch, Path(remainder[len(branch)+1:])
-
-    raise InvalidSlug(slug)
-
 def _get_content_from(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
@@ -334,22 +370,20 @@ def _get_content_from(org, repo, branch, filepath):
         raise Error(_("Invalid slug. Did you mean to submit something else?"))
     return r.content
 
-def _merge_cs50_yaml(cs50, root_cs50):
-    """ Merge .cs50.yaml with .cs50.yaml from root of repo """
-    result = copy.deepcopy(root_cs50)
+def _merge_tool_yaml(local, root):
+    """
+    Merge local (tool specific part of .cs50.yaml at problem in repo)
+    with root (tool specific part of .cs50.yaml at root of repo)
+    """
+    result = copy.deepcopy(root)
 
-    for tool in cs50:
-        if tool not in root_cs50:
-            result[tool] = cs50[tool]
-            continue
-
-        for key in cs50[tool]:
-            if key in root_cs50[tool] and isinstance(root_cs50[tool][key], list):
-                # Note: References in .yaml become actual Python references once parsed
-                # Cannot use += here!
-                result[tool][key] = result[tool][key] + cs50[tool][key]
-            else:
-                result[tool][key] = cs50[tool][key]
+    for key in local:
+        if key in root and isinstance(root[key], list):
+            # Note: References in .yaml become actual Python references once parsed
+            # Cannot use += here!
+            result[key] = result[key] + local[key]
+        else:
+            result[key] = local[key]
     return result
 
 def _check_required(tool_yaml):
@@ -542,4 +576,7 @@ if __name__ == "__main__":
         return True
 
     push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
-    #print(local("cs50/problems2/foo"))
+
+    #global LOCAL_PATH
+    #LOCAL_PATH = "./test"
+    #print(local("cs50/problems2/master/hello", "check50"))
