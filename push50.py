@@ -176,39 +176,53 @@ def prepare(org, branch, user, tool_yaml):
                             "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
             raise e
 
-        # TODO .gitattribute stuff
+        # shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
+        with _shadow(".gitattributes") as hidden_gitattributes:
+            try:
+                _run(git("checkout --force {} .gitattributes".format(branch)))
+            except Error:
+                pass
 
-        # set user name/email in repo config
-        _run(git(f"config user.email {shlex.quote(user.email)}"))
-        _run(git(f"config user.name {shlex.quote(user.name)}"))
+            # set user name/email in repo config
+            _run(git(f"config user.email {shlex.quote(user.email)}"))
+            _run(git(f"config user.name {shlex.quote(user.name)}"))
 
-        # switch to branch without checkout
-        _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
+            # switch to branch without checkout
+            _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-        # add exclude file
-        exclude = _convert_yaml_to_exclude(tool_yaml)
-        exclude_path = f"{git_dir}/info/exclude"
-        with open(exclude_path, "w") as f:
-            f.write(exclude + "\n")
-            f.write(".git*\n")
-            f.write(".lfs*\n")
-        _run(git(f"config core.excludesFile {exclude_path}"))
+            # add exclude file
+            exclude = _convert_yaml_to_exclude(tool_yaml)
+            exclude_path = f"{git_dir}/info/exclude"
+            with open(exclude_path, "w") as f:
+                f.write(exclude + "\n")
+                f.write(".git*\n")
+                f.write(".lfs*\n")
+            _run(git(f"config core.excludesFile {exclude_path}"))
 
-        # add files to staging area
-        _run(git("add --all"))
+            # add files to staging area
+            _run(git("add --all"))
 
-        # get file lists
-        files = _run(git("ls-files")).split("\n")
-        excluded_files = _run(git("ls-files --other")).split("\n")
+            # get file lists
+            files = _run(git("ls-files")).replace("\r\n", "\n").split("\n")
+            excluded_files = _run(git("ls-files --other")).replace("\r\n", "\n").split("\n")
 
-        # TODO git lfs
+            # remove gitattributes from files
+            if Path(".gitattributes").exists() and ".gitattributes" in files:
+                files.remove(".gitattributes")
 
-        # check that at least 1 file is staged
-        if not files:
-            raise Error(_("No files in this directory are expected for submission."))
+            # remove the shadowed gitattributes from excluded_files
+            if hidden_gitattributes.name in excluded_files:
+                excluded_files.remove(hidden_gitattributes.name)
 
-        progress_bar.stop()
-        yield Repository(git, files, excluded_files)
+            # add any oversized files through git-lfs
+            _add_with_lfs(files, git)
+
+            # check that at least 1 file is staged
+            if not files:
+                raise Error(_("No files in this directory are expected for submission."))
+
+            progress_bar.stop()
+            yield Repository(git, files, excluded_files)
 
 def upload(repository, branch, user):
     """ Commit + push to branch """
@@ -426,6 +440,73 @@ def _convert_yaml_to_exclude(tool_yaml):
         includes += [req for req in tool_yaml["required"] if req not in includes]
 
     return "*" + "".join([f"\n!{i}" for i in includes])
+
+def _add_with_lfs(files, git):
+    """
+    Add any oversized files with lfs
+    Throws error if a file is bigger than 2GB or git-lfs is not installed
+    """
+    # check for large files > 100 MB (and huge files > 2 GB)
+    # https://help.github.com/articles/conditions-for-large-files/
+    # https://help.github.com/articles/about-git-large-file-storage/
+    larges, huges = [], []
+    for file in files:
+        size = os.path.getsize(file)
+        if size > (100 * 1024 * 1024):
+            larges.append(file)
+        elif size > (2 * 1024 * 1024 * 1024):
+            huges.append(file)
+
+    # raise Error if a file is >2GB
+    if huges:
+        raise Error(_("These files are too large to be submitted:\n{}\n"
+                      "Remove these files from your directory "
+                      "and then re-run {}!").format("\n".join(huges), org))
+
+    # add large files (>100MB) with git-lfs
+    if larges:
+        # raise Error if git-lfs not installed
+        if not shutil.which("git-lfs"):
+            raise Error(_("These files are too large to be submitted:\n{}\n"
+                          "Install git-lfs (or remove these files from your directory) "
+                          "and then re-run!").format("\n".join(larges)))
+
+        # install git-lfs for this repo
+        _run(git("lfs install --local"))
+
+        # for pre-push hook
+        _run(git("config credential.helper cache"))
+
+        # rm previously added file, have lfs track file, add file again
+        for large in larges:
+            _run(git("rm --cached {}".format(shlex.quote(large))))
+            _run(git("lfs track {}".format(shlex.quote(large))))
+            _run(git("add {}".format(shlex.quote(large))))
+        _run(git("add --force .gitattributes"))
+
+@contextlib.contextmanager
+def _shadow(filepath):
+    """
+    Temporarily shadow filepath, allowing you to safely create a file at filepath
+    When entering:
+    - renames file at filepath to unique hidden name
+    When exiting:
+    - removes file
+    - restores file (if it existed in the first place)
+    Yields the hidden_path (only exists if filepath exists)
+    """
+    filepath = Path(filepath).absolute()
+    hidden_path = filepath.parent / f".shadowed_{filepath.name}_{round(time.time())}"
+    is_shadowing = filepath.exists()
+    if is_shadowing:
+        os.rename(filepath, hidden_path)
+
+    yield hidden_path
+
+    if filepath.exists():
+        os.remove(filepath)
+    if is_shadowing:
+        os.rename(hidden_path, filepath)
 
 @contextlib.contextmanager
 def _authenticate_ssh(org):
