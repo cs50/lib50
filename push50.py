@@ -26,7 +26,7 @@ from pathlib import Path
 
 #Git.GIT_PYTHON_TRACE = 1
 #logging.basicConfig(level="DEBUG")
-QUIET = True
+QUIET = False
 LOCAL_PATH = "~/.local/share/push50"
 
 # Internationalization
@@ -113,7 +113,7 @@ def connect(slug, tool):
         slug = Slug(slug)
 
         # get .cs50.yaml
-        cs50_yaml= yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))
+        cs50_yaml = yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))
 
         # ensure tool exists
         try:
@@ -216,6 +216,9 @@ def prepare(org, branch, user, tool_yaml):
             if hidden_gitattributes.name in excluded_files:
                 excluded_files.remove(hidden_gitattributes.name)
 
+            # remove all empty strings from excluded_files
+            excluded_files = [f for f in excluded_files if f]
+
             # add any oversized files through git-lfs
             _add_with_lfs(files, git)
 
@@ -258,6 +261,9 @@ def check_dependencies():
 class Error(Exception):
     pass
 
+class ConnectionError(Error):
+    pass
+
 class InvalidSlug(Error):
     pass
 
@@ -276,7 +282,7 @@ class Slug:
         # Find third "/" in identifier
         idx = slug.find("/", slug.find("/") + 1)
         if idx == -1:
-            raise InvalidSlug(slug)
+            raise InvalidSlug("Invalid slug {}".format(slug))
 
         # split slug in <org>/<repo>/<remainder>
         remainder = slug[idx+1:]
@@ -289,7 +295,7 @@ class Slug:
                 self.problem = Path(remainder[len(branch)+1:])
                 break
         else:
-            raise InvalidSlug(slug)
+            raise InvalidSlug("Invalid slug {}".format(slug))
 
     def _check_endings(self):
         """ check begin/end of slug, raises InvalidSlug if malformed """
@@ -396,7 +402,10 @@ def _get_content_from(org, repo, branch, filepath):
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = requests.get(url)
     if not r.ok:
-        raise Error(_("Invalid slug. Did you mean to submit something else?"))
+        if r.status_code == 404:
+            raise InvalidSlug(_("Invalid slug. Did you mean to submit something else?"))
+        else:
+            raise ConnectionError(_("Could not connect to GitHub."))
     return r.content
 
 def _merge_tool_yaml(local, root):
