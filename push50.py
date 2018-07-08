@@ -26,7 +26,7 @@ from pathlib import Path
 
 #Git.GIT_PYTHON_TRACE = 1
 #logging.basicConfig(level="DEBUG")
-
+QUIET = True
 LOCAL_PATH = "~/.local/share/push50"
 
 # Internationalization
@@ -42,6 +42,8 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
         with prepare(org, slug, user, tool_yaml) as repository:
             if prompt(repository.included, repository.excluded):
                 upload(repository, slug, user)
+            else:
+                raise Error("No files were submitted.")
 
 def local(slug, tool, update=True):
     """
@@ -234,7 +236,7 @@ def upload(repository, branch, user):
 
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
-        _run(repository.git(f"push origin {branch}"), stdin=user.password)
+        _run(repository.git(f"push origin {branch}"), stdin=[user.password])
 
 def check_dependencies():
     """
@@ -314,7 +316,7 @@ class ProgressBar:
     """ Show a progress bar starting with message """
     def __init__(self, message):
         self._message = message
-        self._progressing = True
+        self._progressing = False
         self._thread = None
 
     def stop(self):
@@ -331,19 +333,26 @@ class ProgressBar:
                 time.sleep(0.5)
             print()
 
-        self._thread = threading.Thread(target=progress_runner)
-        self._thread.start()
+        if not QUIET:
+            self._progressing = True
+            self._thread = threading.Thread(target=progress_runner)
+            self._thread.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
 class _StreamToLogger:
-    def __init__(self, log):
+    """
+    Send all that enters the stream to log-function
+    Except any message that contains a message from ignored_messages
+    """
+    def __init__(self, log, ignored_messages=tuple()):
         self._log = log
+        self._ignored = ignored_messages
 
     def write(self, message):
-        if message != '\n':
+        if message != '\n' and not any(ig in message for ig in self._ignored):
             self._log(message)
 
     def flush(self):
@@ -364,8 +373,8 @@ def _run(command, stdin=tuple(), timeout=None):
         ignore_sighup=True,
         timeout=timeout)
 
-    # log command output
-    child.logfile_read = _StreamToLogger(logging.debug)
+    # log command output, ignore any messages containing anything from stdin
+    child.logfile_read = _StreamToLogger(logging.debug, ignored_messages=stdin)
 
     # send stdin
     for line in stdin:
@@ -634,35 +643,6 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
-    # example check50/submit50 call
-
-    def cprint(text="", color=None, on_color=None, attrs=None, **kwargs):
-        """Colorizes text (and wraps to terminal's width)."""
-        import termcolor
-        import textwrap
-
-        columns = 80  # because get_terminal_size's default fallback doesn't work in pipes
-
-        # print text
-        termcolor.cprint(textwrap.fill(text, columns, drop_whitespace=False),
-                         color=color, on_color=on_color, attrs=attrs, **kwargs)
-
-    # example check50 call
-    def prompt(included, excluded):
-        if included:
-            cprint(_("Files that will be submitted:"), "green")
-            for file in included:
-                cprint("./{}".format(file), "green")
-
-        # files that won't be submitted
-        if excluded:
-            cprint(_("Files that won't be submitted:"), "yellow")
-            for other in excluded:
-                cprint("./{}".format(other), "yellow")
-
-        return True
-
-    push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
-
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
+    pass
