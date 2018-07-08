@@ -67,19 +67,25 @@ def local(slug, tool, update=True):
 
         # pull new commits if update=True
         if update:
-            _run(git("pull"))
+            _run(git("fetch"))
     else:
         # clone repo to local_path
         _run(f"git clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}")
 
     problem_path = (local_path / slug.problem).absolute()
 
+    if not problem_path.exists():
+        raise InvalidSlug(f"{slug.problem} does not exist at {slug.org}/{slug.repo}")
+
     # get tool_yaml
-    with open(problem_path / ".cs50.yaml", "r") as f:
-        try:
-            tool_yaml = yaml.safe_load(f.read())[tool]
-        except KeyError:
-            raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+    try:
+        with open(problem_path / ".cs50.yaml", "r") as f:
+            try:
+                tool_yaml = yaml.safe_load(f.read())[tool]
+            except KeyError:
+                raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+    except FileNotFoundError:
+        raise InvalidSlug("Invalid slug, did you mean something else?")
 
     # if problem is not referencing root of repo
     if slug.problem != Path("."):
@@ -577,6 +583,5 @@ if __name__ == "__main__":
 
     push("check50", "cs50/problems2/master/hello", "check50", prompt=prompt)
 
-    #global LOCAL_PATH
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
