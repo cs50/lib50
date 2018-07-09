@@ -21,7 +21,6 @@ import time
 import tty
 
 import attr
-from git import Git, GitError, Repo, SymbolicReference, NoSuchPathError
 import pexpect
 import requests
 import termcolor
@@ -58,13 +57,7 @@ def local(slug, tool, update=True):
     Returns path to local copy + config
     """
     # parse slug
-    if update:
-        slug = Slug(slug)
-    else:
-        try:
-            slug = Slug(slug, offline=True)
-        except InvalidSlug:
-            slug = Slug(slug)
+    slug = Slug(slug, offline=not update)
 
     local_path = Path(LOCAL_PATH) / slug.org / slug.repo
 
@@ -122,13 +115,15 @@ def connect(slug, tool):
 
         # get .cs50.yaml
         try:
-            config = yaml.safe_load(_get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))[tool]
+            config = yaml.safe_load(_get_content(slug.org, slug.repo,
+                                                 slug.branch, slug.problem / ".cs50.yaml"))[tool]
         except (yaml.YAMLError, KeyError):
             raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
-            root_config = yaml.safe_load(_get_content(slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
+            root_config = yaml.safe_load(_get_content(
+                slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
         except (Error, KeyError):
             pass
         else:
@@ -173,9 +168,9 @@ def prepare(org, branch, user, config):
         # clone just .git folder
         try:
             with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
-                child.expect("Password for .+:")
                 if user.password:
-                    child.sendline(user.password)
+                    child.expect("Password for .+:")
+                        child.sendline(user.password)
 
         except Error:
             if user.password:
@@ -214,8 +209,8 @@ def prepare(org, branch, user, config):
             _run(git("add --all"))
 
             # get file lists
-            files = _run(git("ls-files")).replace("\r\n", "\n").split("\n")
-            excluded_files = _run(git("ls-files --other")).replace("\r\n", "\n").split("\n")
+            files = _run(git("ls-files")).split("\n")
+            excluded_files = _run(git("ls-files --other")).split("\n")
 
             # remove gitattributes from files
             if Path(".gitattributes").exists() and ".gitattributes" in files:
@@ -229,7 +224,7 @@ def prepare(org, branch, user, config):
             excluded_files = [f for f in excluded_files if f]
 
             # add any oversized files through git-lfs
-            _add_with_lfs(files, git)
+            _lfs_add(files, git)
 
             # check that at least 1 file is staged
             if not files:
@@ -253,8 +248,8 @@ def upload(repository, branch, user):
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
         with _spawn(repository.git(f"push origin {branch}")) as child:
-            child.expect("Password for .+:")
             if user.password:
+                child.expect("Password for .+:")
                 child.sendline(password)
 
         commit_hash = _run(repository.git("rev-parse HEAD"))
@@ -337,21 +332,21 @@ class Slug:
     def _check_endings(self):
         """ check begin/end of slug, raises InvalidSlug if malformed """
         if self.slug.startswith("/") and self.slug.endswith("/"):
-            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
+            raise InvalidSlug(
+                _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
         elif self.slug.startswith("/"):
-            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
+            raise InvalidSlug(
+                _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
         elif self.slug.endswith("/"):
-            raise InvalidSlug(_("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
+            raise InvalidSlug(
+                _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
 
     def _get_branches(self):
         """ get branches from org/repo """
+        get_refs = f"git -C {Path(LOCAL_PATH) / self.org / self.repo} show-ref --heads" if self.offline else f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
         try:
-            if self.offline:
-                return map(str, Repo(f"{str(LOCAL_PATH)}/{self.org}/{self.repo}").branches)
-            else:
-                return (line.split("\t")[1].replace("refs/heads/", "")
-                        for line in Git().ls_remote(f"https://github.com/{self.org}/{self.repo}", heads=True).split("\n"))
-        except (GitError, NoSuchPathError):
+            return (line.split("\t")[1].replace("refs/heads/", "") for line in _run(get_refs).split("\n"))
+        except Error:
             return []
 
 
@@ -433,7 +428,7 @@ def _run(command, timeout=None):
     """ Run a command, returns command output """
 
     with _spawn(command, timeout) as child:
-        command_output = child.read().strip()
+        command_output = child.read().strip().replace("\r\n", "\n")
 
     if child.signalstatus is None and child.exitstatus != 0:
         logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
@@ -506,7 +501,7 @@ def _create_exclude(config):
     return "*\n" + "\n".join(f"!{i}" for i in includes)
 
 
-def _add_with_lfs(files, git):
+def _lfs_add(files, git):
     """
     Add any oversized files with lfs
     Throws error if a file is bigger than 2GB or git-lfs is not installed
@@ -626,7 +621,8 @@ def _authenticate_https(org):
         if res.status_code != 200:
             logging.info(res.headers)
             logging.info(res.text)
-            raise Error("Invalid username and/or password." if res.status_code == 401 else "Could not authenticate user.")
+            raise Error("Invalid username and/or password." if res.status_code ==
+                        401 else "Could not authenticate user.")
 
         # canonicalize (capitalization of) username,
         # especially if user logged in via email address
@@ -635,7 +631,7 @@ def _authenticate_https(org):
         timeout = int(datetime.timedelta(weeks=1).total_seconds())
 
         with _spawn(f"git -c credential.helper='cache --socket {socket} --timeout {timeout}' "
-                         "-c credentialcache.ignoresighub=true "
+                    "-c credentialcache.ignoresighub=true "
                     "credential approve") as child:
             child.sendline(f"username={username}")
             child.sendline(f"password={password}")
