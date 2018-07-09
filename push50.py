@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import pkg_resources
 import re
+import readline
 import shutil
 import shlex
 import subprocess
@@ -21,12 +22,13 @@ import time
 import tty
 
 import attr
+import keyring
 import pexpect
 import requests
 import termcolor
 import yaml
 
-logging.basicConfig(level="INFO")
+logging.basicConfig(level="DEBUG")
 QUIET = True
 LOCAL_PATH = "~/.local/share/push50"
 
@@ -72,7 +74,7 @@ def local(slug, tool, update=True):
             _run(git("fetch"))
     else:
         # clone repo to local_path
-        _run(f"git clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}")
+        _run(f"git -c credential.helper= clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}")
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -166,10 +168,11 @@ def prepare(org, branch, user, config):
         def git(command): return f"git --git-dir={git_dir} --work-tree={os.getcwd()} {command}"
 
         # clone just .git folder
+        # import pdb
+        # pdb.set_trace()
         try:
-            with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
-                if user.password:
-                    child.expect("Password for .+:")
+            with _spawn(git(f"-c credential.helper= clone --bare {user.repo} {git_dir}")) as child:
+                if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                     child.sendline(user.password)
 
         except Error:
@@ -247,10 +250,9 @@ def upload(repository, branch, user):
 
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
-        with _spawn(repository.git(f"push origin {branch}")) as child:
-            if user.password:
-                child.expect("Password for .+:")
-                child.sendline(password)
+        with _spawn(repository.git(f"-c credential.helper= push origin {branch}")) as child:
+            if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
+                child.sendline(user.password)
 
         commit_hash = _run(repository.git("rev-parse HEAD"))
         return user.name, commit_hash
@@ -376,19 +378,18 @@ class ProgressBar:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-
 class _StreamToLogger:
     """
     Send all that enters the stream to log-function
-    Except any message that contains a message from ignored_messages
     """
 
-    def __init__(self, log, ignored_messages=tuple()):
+    def __init__(self, log):
         self._log = log
-        # self._ignored = ignored_messages
 
     def write(self, message):
-        self._log(message.strip())
+        message = message.strip()
+        if message:
+            self._log(message)
 
     def flush(self):
         pass
@@ -403,15 +404,24 @@ def _spawn(command, timeout=None):
     child = pexpect.spawn(
         command,
         encoding="utf-8",
-        cwd=os.getcwd(),
         env=dict(os.environ),
-        ignore_sighup=True,
         timeout=timeout)
 
     try:
         child.logfile_read = _StreamToLogger(logging.debug)
         yield child
-    finally:
+    except:
+        child.close()
+        raise
+    else:
+        while child.isalive():
+            try:
+                child.read_nonblocking(timeout=0)
+            except pexpect.TIMEOUT:
+                pass
+            except pexpect.EOF:
+                child.wait()
+                break
         child.close()
         if child.signalstatus is None and child.exitstatus != 0:
             logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
@@ -583,22 +593,17 @@ def _authenticate_https(org):
     socket = cache / "push50"
 
     try:
-        cmd = f"git -c credential.helper='cache --socket {socket}' credential fill"
-        logging.info(termcolor.colored(cmd, attrs=["bold"]))
-        child = pexpect.spawn(cmd, encoding="utf8")
-        child.logfile_read = _StreamToLogger(logging.info)
-        child.sendline("")
+        username = _run("git config --global credential.https://github.com/submit50.username")
+    except Error:
+        username = password = None
+    else:
+        password = keyring.get_password("push50", username)
 
-        i = child.expect(["Username:", "Password:", "username=([^\r]+)\r\npassword=([^\r]+)"])
-        if i == 2:
-            username, password = child.match.groups()
-        else:
-            username = password = None
-        child.close()
 
-        if not password:
-            username = _get_username("Github username: ")
-            password = _get_password("Github password: ")
+    try:
+        if password is None:
+            username = _prompt_username("GitHub username: ", prefill=username)
+            password = _prompt_password("GitHub password: ")
 
         res = requests.get("https://api.github.com/user", auth=(username, password))
 
@@ -620,45 +625,32 @@ def _authenticate_https(org):
 
         timeout = int(datetime.timedelta(weeks=1).total_seconds())
 
-        with _spawn(f"git -c credential.helper='cache --socket {socket} --timeout {timeout}' "
-                    "-c credentialcache.ignoresighub=true "
-                    "credential approve") as child:
-            child.sendline(f"username={username}")
-            child.sendline(f"password={password}")
-            child.sendline("")
+        _run(f"git config --global credential.https://github.com/submit50.username {username}")
+        keyring.set_password("push50", username, password)
 
         yield User(name=username,
                    password=password,
                    repo=f"https://{username}@github.com/{org}/{username}")
     except:
-        _run(f"git credential-cache --socket {socket} exit")
-        try:
-            with _spawn("git credential-osxkeychain erase") as child:
-                child.sendline("host=github.com")
-                child.sendline("protocol=https")
-        except Error:
-            pass
+        if username is not None:
+            logout(username)
         raise
 
 
-@contextlib.contextmanager
-def _file_buffer(contents):
-    """ Contextmanager that produces a temporary file with contents """
-    with tempfile.TemporaryFile("r+") as f:
-        f.writelines(contents)
-        f.seek(0)
-        yield f
-
-
-def _get_username(prompt="Username: "):
+def _prompt_username(prompt="Username: ", prefill=None):
     """ Prompt the user for username """
+    if prefill:
+        readline.set_startup_hook(lambda: readline.insert_text(prefill))
+
     try:
         return input(prompt).strip()
     except EOFError:
         print()
+    finally:
+        readline.set_startup_hook()
 
 
-def _get_password(prompt="Password: "):
+def _prompt_password(prompt="Password: "):
     """ Prompt the user for password """
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
@@ -689,6 +681,21 @@ def _get_password(prompt="Password: "):
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     return bytes(password).decode()
+
+
+def logout(username):
+    try:
+        username = _run("git config --global credential.https://github.com/submit50.username")
+    except Error:
+        username = _prompt_username("GitHub username: ")
+
+    _run("git config --global --unset credential.https://github.com/submit50.username")
+
+    try:
+        keyring.delete_password("push50", username)
+    except keyring.errors.PasswordDeleteError:
+        pass
+
 
 
 # TODO remove
