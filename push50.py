@@ -33,7 +33,10 @@ LOCAL_PATH = "~/.local/share/push50"
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
 
 def push(org, slug, tool, prompt = (lambda included, excluded : True)):
-    """ Push to github.com/org/repo=username/slug if tool exists """
+    """
+    Push to github.com/org/repo=username/slug if tool exists
+    Returns username, commit hash
+    """
     check_dependencies()
 
     tool_yaml = connect(slug, tool)
@@ -41,7 +44,7 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
     with authenticate(org) as user:
         with prepare(org, slug, user, tool_yaml) as repository:
             if prompt(repository.included, repository.excluded):
-                upload(repository, slug, user)
+                return upload(repository, slug, user)
             else:
                 raise Error("No files were submitted.")
 
@@ -230,7 +233,10 @@ def prepare(org, branch, user, tool_yaml):
             yield Repository(git, files, excluded_files)
 
 def upload(repository, branch, user):
-    """ Commit + push to branch """
+    """
+    Commit + push to branch
+    Returns username, commit hash
+    """
     with ProgressBar("Uploading"):
         # decide on commit message
         headers = requests.get("https://api.github.com/").headers
@@ -240,6 +246,9 @@ def upload(repository, branch, user):
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
         _run(repository.git(f"push origin {branch}"), stdin=[user.password])
+
+        commit_hash = _run(repository.git("rev-parse HEAD"))
+        return user.name, commit_hash
 
 def check_dependencies():
     """
@@ -652,6 +661,8 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
+    #push("submit50", "cs50/problems2/foo/hello", "submit50")
+
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
     pass
