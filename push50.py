@@ -171,7 +171,7 @@ def prepare(org, branch, user, config):
         # import pdb
         # pdb.set_trace()
         try:
-            with _spawn(git(f"-c credential.helper= clone --bare {user.repo} {git_dir}")) as child:
+            with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                     child.sendline(user.password)
 
@@ -250,7 +250,7 @@ def upload(repository, branch, user):
 
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
-        with _spawn(repository.git(f"-c credential.helper= push origin {branch}")) as child:
+        with _spawn(repository.git(f"push origin {branch}")) as child:
             if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                 child.sendline(user.password)
 
@@ -394,7 +394,7 @@ class _StreamToLogger:
     def flush(self):
         pass
 
-def _format_git(git_args="", old_git=(lambda command, args="" : f"git -c credential.helper={args} {command}")):
+def _format_git(git_args="", old_git=(lambda command, args="" : f"git -c credential.helper= {args} {command}")):
     """
     Formats a git command with git_args
     Returns a function that takes a git command and returns a formatted string representing that command with git_args
