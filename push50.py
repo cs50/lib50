@@ -182,8 +182,6 @@ def prepare(org, branch, user, config):
                             "Log into https://cs50.me/ in a browser, "
                             "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
             raise e
-        import pdb
-        pdb.set_trace()
 
         # shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
         with _shadow(".gitattributes") as hidden_gitattributes:
@@ -687,7 +685,7 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
-    # push("submit50", "cs50/problems2/foo/hello", "submit50")
+    push("submit50", "cs50/problems2/foo/hello", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
