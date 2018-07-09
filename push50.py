@@ -696,6 +696,19 @@ def logout(username):
     except keyring.errors.PasswordDeleteError:
         pass
 
+class DummyKeyring:
+    def get_password(*args, **kwargs):
+        pass
+
+    def delete_password(*args, **kwargs):
+        pass
+
+    def set_password(*args, **kwargs):
+        pass
+
+if isinstance(keyring.get_keyring(), keyring.backends.fail.Keyring):
+    keyring.set_keyring(DummyKeyring)
+
 
 
 # TODO remove
