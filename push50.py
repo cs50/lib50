@@ -683,7 +683,7 @@ def _prompt_password(prompt="Password: "):
     return bytes(password).decode()
 
 
-def logout(username):
+def logout(username=None):
     if username is not None:
         try:
             username = _run("git config --global credential.https://github.com/submit50.username")
