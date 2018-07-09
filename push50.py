@@ -34,7 +34,8 @@ LOCAL_PATH = "~/.local/share/push50"
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
 
-def push(org, slug, tool, prompt = (lambda included, excluded : True)):
+
+def push(org, slug, tool, prompt=(lambda included, excluded: True)):
     """
     Push to github.com/org/repo=username/slug if tool exists
     Returns username, commit hash
@@ -49,6 +50,7 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
                 return upload(repository, slug, user)
             else:
                 raise Error("No files were submitted.")
+
 
 def local(slug, tool, update=True):
     """
@@ -67,7 +69,7 @@ def local(slug, tool, update=True):
     local_path = Path(LOCAL_PATH) / slug.org / slug.repo
 
     if local_path.exists():
-        git = lambda command : f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
+        def git(command): return f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
 
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
@@ -107,6 +109,7 @@ def local(slug, tool, update=True):
 
     return problem_path, config
 
+
 def connect(slug, tool):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
@@ -123,7 +126,6 @@ def connect(slug, tool):
         except (yaml.YAMLError, KeyError):
             raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
 
-
         # get .cs50.yaml from root if exists and merge with local
         try:
             root_config = yaml.safe_load(_get_content(slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
@@ -136,6 +138,7 @@ def connect(slug, tool):
         _check_required(config)
 
         return config
+
 
 @contextlib.contextmanager
 def authenticate(org):
@@ -153,6 +156,7 @@ def authenticate(org):
         else:
             yield user
 
+
 @contextlib.contextmanager
 def prepare(org, branch, user, config):
     """
@@ -164,7 +168,7 @@ def prepare(org, branch, user, config):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        git = lambda command : f"git --git-dir={git_dir} --work-tree={os.getcwd()} {command}"
+        def git(command): return f"git --git-dir={git_dir} --work-tree={os.getcwd()} {command}"
 
         # clone just .git folder
         try:
@@ -234,6 +238,7 @@ def prepare(org, branch, user, config):
             progress_bar.stop()
             yield Repository(git, files, excluded_files)
 
+
 def upload(repository, branch, user):
     """
     Commit + push to branch
@@ -255,6 +260,7 @@ def upload(repository, branch, user):
         commit_hash = _run(repository.git("rev-parse HEAD"))
         return user.name, commit_hash
 
+
 def check_dependencies():
     """
     Check that dependencies are installed:
@@ -272,11 +278,14 @@ def check_dependencies():
     if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
+
 class Error(Exception):
     pass
 
+
 class ConnectionError(Error):
     pass
+
 
 class InvalidSlug(Error):
     pass
@@ -313,14 +322,14 @@ class Slug:
             raise InvalidSlug("Invalid slug {}".format(slug))
 
         # split slug in <org>/<repo>/<remainder>
-        remainder = slug[idx+1:]
+        remainder = slug[idx + 1:]
         self.org, self.repo = slug.split("/")[:2]
 
         # find a matching branch
         for branch in self._get_branches():
             if remainder.startswith(f"{branch}"):
                 self.branch = branch
-                self.problem = Path(remainder[len(branch)+1:])
+                self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
             raise InvalidSlug("Invalid slug {}".format(slug))
@@ -348,6 +357,7 @@ class Slug:
 
 class ProgressBar:
     """ Show a progress bar starting with message """
+
     def __init__(self, message):
         self._message = message
         self._progressing = False
@@ -379,11 +389,13 @@ class ProgressBar:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
+
 class _StreamToLogger:
     """
     Send all that enters the stream to log-function
     Except any message that contains a message from ignored_messages
     """
+
     def __init__(self, log, ignored_messages=tuple()):
         self._log = log
         # self._ignored = ignored_messages
@@ -417,7 +429,6 @@ def _spawn(command, timeout=None):
         child.close()
 
 
-
 def _run(command, timeout=None):
     """ Run a command, returns command output """
 
@@ -442,6 +453,7 @@ def _get_content(org, repo, branch, filepath):
             raise ConnectionError(_("Could not connect to GitHub."))
     return r.content
 
+
 def _merge_config(local, root):
     """
     Merge local (tool specific part of .cs50.yaml at problem in repo)
@@ -458,6 +470,7 @@ def _merge_config(local, root):
             result[key] = local[key]
     return result
 
+
 def _check_required(config):
     """ Check that all required files are present """
 
@@ -472,6 +485,7 @@ def _check_required(config):
             "\n".join(missing),
             _("Ensure you have the required files before submitting."))
         raise Error(msg)
+
 
 def _create_exclude(config):
     """
@@ -490,6 +504,7 @@ def _create_exclude(config):
         includes += [req for req in config["required"] if req not in includes]
 
     return "*\n" + "\n".join(f"!{i}" for i in includes)
+
 
 def _add_with_lfs(files, git):
     """
@@ -534,6 +549,7 @@ def _add_with_lfs(files, git):
             _run(git("add {}".format(shlex.quote(large))))
         _run(git("add --force .gitattributes"))
 
+
 @contextlib.contextmanager
 def _shadow(filepath):
     """
@@ -558,18 +574,21 @@ def _shadow(filepath):
     if is_shadowing:
         os.rename(hidden_path, filepath)
 
+
 def _authenticate_ssh(org):
     """ Try authenticating via ssh, if succesful yields a User, otherwise raises Error """
     # require ssh-agent
     child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
     # github prints 'Hi {username}!...' when attempting to get shell access
-    i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key", "Permission denied", "Are you sure you want to continue connecting"])
+    i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key",
+                      "Permission denied", "Are you sure you want to continue connecting"])
     child.close()
     if i == 0:
         username = child.match.groups()[0]
         return User(name=username,
-                   password=None,
-                   repo=f"git@github.com/{org}/{username}")
+                    password=None,
+                    repo=f"git@github.com/{org}/{username}")
+
 
 @contextlib.contextmanager
 def _authenticate_https(org):
@@ -617,11 +636,10 @@ def _authenticate_https(org):
 
         with _spawn(f"git -c credential.helper='cache --socket {socket} --timeout {timeout}' "
                          "-c credentialcache.ignoresighub=true "
-                         "credential approve") as child:
+                    "credential approve") as child:
             child.sendline(f"username={username}")
             child.sendline(f"password={password}")
             child.sendline("")
-
 
         yield User(name=username,
                    password=password,
@@ -636,6 +654,7 @@ def _authenticate_https(org):
             pass
         raise
 
+
 @contextlib.contextmanager
 def _file_buffer(contents):
     """ Contextmanager that produces a temporary file with contents """
@@ -644,12 +663,14 @@ def _file_buffer(contents):
         f.seek(0)
         yield f
 
+
 def _get_username(prompt="Username: "):
     """ Prompt the user for username """
     try:
         return input(prompt).strip()
     except EOFError:
         print()
+
 
 def _get_password(prompt="Password: "):
     """ Prompt the user for password """
@@ -662,17 +683,17 @@ def _get_password(prompt="Password: "):
     try:
         while True:
             ch = sys.stdin.buffer.read(1)[0]
-            if ch in (ord("\r"), ord("\n"), 4): # if user presses Enter or ctrl-d
+            if ch in (ord("\r"), ord("\n"), 4):  # if user presses Enter or ctrl-d
                 print("\r")
                 break
-            elif ch == 127: # DEL
+            elif ch == 127:  # DEL
                 try:
                     password.pop()
                 except IndexError:
                     pass
                 else:
                     print("\b \b", end="", flush=True)
-            elif ch == 3: # ctrl-c
+            elif ch == 3:  # ctrl-c
                 print("^C", end="", flush=True)
                 raise KeyboardInterrupt
             else:
@@ -682,6 +703,7 @@ def _get_password(prompt="Password: "):
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     return bytes(password).decode()
+
 
 # TODO remove
 if __name__ == "__main__":
