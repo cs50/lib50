@@ -26,8 +26,8 @@ import requests
 import termcolor
 import yaml
 
-# logging.basicConfig(level="INFO")
-QUIET = False
+logging.basicConfig(level="INFO")
+QUIET = True
 LOCAL_PATH = "~/.local/share/push50"
 
 # Internationalization
@@ -388,7 +388,7 @@ class _StreamToLogger:
         # self._ignored = ignored_messages
 
     def write(self, message):
-        self._log(message)
+        self._log(message.strip())
 
     def flush(self):
         pass
@@ -409,11 +409,13 @@ def _spawn(command, timeout=None):
         timeout=timeout)
 
     try:
-        # log command output, ignore any messages containing anything from stdin
-        child.logfile_read = _StreamToLogger(logging.info)
+        child.logfile_read = _StreamToLogger(logging.debug)
         yield child
     finally:
         child.close()
+        if child.signalstatus is None and child.exitstatus != 0:
+            logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
+            raise Error()
 
 
 def _run(command, timeout=None):
@@ -421,10 +423,6 @@ def _run(command, timeout=None):
 
     with _spawn(command, timeout) as child:
         command_output = child.read().strip().replace("\r\n", "\n")
-
-    if child.signalstatus is None and child.exitstatus != 0:
-        logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
-        raise Error()
 
     return command_output
 
@@ -695,7 +693,7 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
-    # push("submit50", "cs50/problems2/foo/hello", "submit50")
+    push("submit50", "cs50/problems2/foo/hello", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
