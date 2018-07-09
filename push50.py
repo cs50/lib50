@@ -582,7 +582,7 @@ def _authenticate_ssh(org):
         username = child.match.groups()[0]
         return User(name=username,
                     password=None,
-                    repo=f"git@github.com/{org}/{username}")
+                    repo=f"git@github.com:{org}/{username}")
 
 
 @contextlib.contextmanager
