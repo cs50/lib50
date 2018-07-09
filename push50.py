@@ -64,8 +64,7 @@ def local(slug, tool, update=True):
     local_path = Path(LOCAL_PATH) / slug.org / slug.repo
 
     if local_path.exists():
-        def git(command): return f"git --git-dir={local_path / '.git'} --work-tree={local_path} {command}"
-
+        git = _format_git(f"--git-dir={local_path / '.git'} --work-tree={local_path}")
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -74,7 +73,8 @@ def local(slug, tool, update=True):
             _run(git("fetch"))
     else:
         # clone repo to local_path
-        _run(f"git -c credential.helper= clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}")
+        git = _format_git()
+        _run(git(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -165,7 +165,7 @@ def prepare(org, branch, user, config):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        def git(command): return f"git --git-dir={git_dir} --work-tree={os.getcwd()} {command}"
+        git = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}")
 
         # clone just .git folder
         # import pdb
@@ -394,6 +394,14 @@ class _StreamToLogger:
     def flush(self):
         pass
 
+def _format_git(git_args="", old_git=(lambda command, args="" : f"git -c credential.helper={args} {command}")):
+    """
+    Formats a git command with git_args
+    Returns a function that takes a git command and returns a formatted string representing that command with git_args
+    """
+    def git(command, args=""):
+        return old_git(command, args=f"{args} {git_args}")
+    return git
 
 @contextlib.contextmanager
 def _spawn(command, timeout=None):
