@@ -28,7 +28,7 @@ import requests
 import termcolor
 import yaml
 
-logging.basicConfig(level="DEBUG")
+# logging.basicConfig(level="DEBUG")
 QUIET = True
 LOCAL_PATH = "~/.local/share/push50"
 
@@ -588,6 +588,7 @@ def _authenticate_ssh(org):
 @contextlib.contextmanager
 def _authenticate_https(org):
     """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
+
     cache = Path("~/.git-credential-cache").expanduser()
     cache.mkdir(mode=0o700, exist_ok=True)
     socket = cache / "push50"
@@ -696,7 +697,10 @@ def logout(username):
     except keyring.errors.PasswordDeleteError:
         pass
 
-class DummyKeyring:
+
+class DummyKeyring(keyring.backend.KeyringBackend):
+    """Faux keyring backend used when keyring cannot find a suitable default.
+    Essentially disables credential caching"""
     def get_password(*args, **kwargs):
         pass
 
@@ -706,9 +710,10 @@ class DummyKeyring:
     def set_password(*args, **kwargs):
         pass
 
-if isinstance(keyring.get_keyring(), keyring.backends.fail.Keyring):
-    keyring.set_keyring(DummyKeyring)
 
+if isinstance(keyring.get_keyring(), keyring.backends.fail.Keyring):
+    logging.info("no suitable credential keyrings found")
+    keyring.set_keyring(DummyKeyring())
 
 
 # TODO remove
