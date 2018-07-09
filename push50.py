@@ -77,7 +77,7 @@ def local(slug, tool, update=True):
     problem_path = (local_path / slug.problem).absolute()
 
     if not problem_path.exists():
-        raise InvalidSlug(f"{slug.problem} does not exist at {slug.org}/{slug.repo}")
+        raise Error(f"{slug.problem} does not exist at {slug.org}/{slug.repo}")
 
     # get tool_yaml
     try:
@@ -85,9 +85,9 @@ def local(slug, tool, update=True):
             try:
                 config = yaml.safe_load(f.read())[tool]
             except KeyError:
-                raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+                raise Error("Invalid slug for {}, did you mean something else?".format(tool))
     except FileNotFoundError:
-        raise InvalidSlug("Invalid slug, did you mean something else?")
+        raise Error("Invalid slug, did you mean something else?")
 
     # if problem is not referencing root of repo
     if slug.problem != Path("."):
@@ -118,7 +118,7 @@ def connect(slug, tool):
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml"))[tool]
         except (yaml.YAMLError, KeyError):
-            raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+            raise Error("Invalid slug for {}, did you mean something else?".format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
@@ -278,14 +278,6 @@ class Error(Exception):
     pass
 
 
-class ConnectionError(Error):
-    pass
-
-
-class InvalidSlug(Error):
-    pass
-
-
 @attr.s
 class User:
     name = attr.ib()
@@ -314,7 +306,7 @@ class Slug:
         # Find third "/" in identifier
         idx = slug.find("/", slug.find("/") + 1)
         if idx == -1:
-            raise InvalidSlug("Invalid slug {}".format(slug))
+            raise Error("Invalid slug {}".format(slug))
 
         # split slug in <org>/<repo>/<remainder>
         remainder = slug[idx + 1:]
@@ -327,18 +319,18 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlug("Invalid slug {}".format(slug))
+            raise Error("Invalid slug {}".format(slug))
 
     def _check_endings(self):
-        """ check begin/end of slug, raises InvalidSlug if malformed """
+        """ check begin/end of slug, raises Error if malformed """
         if self.slug.startswith("/") and self.slug.endswith("/"):
-            raise InvalidSlug(
+            raise Error(
                 _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
         elif self.slug.startswith("/"):
-            raise InvalidSlug(
+            raise Error(
                 _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
         elif self.slug.endswith("/"):
-            raise InvalidSlug(
+            raise Error(
                 _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
 
     def _get_branches(self):
@@ -443,9 +435,9 @@ def _get_content(org, repo, branch, filepath):
     r = requests.get(url)
     if not r.ok:
         if r.status_code == 404:
-            raise InvalidSlug(_("Invalid slug. Did you mean to submit something else?"))
+            raise Error(_("Invalid slug. Did you mean to submit something else?"))
         else:
-            raise ConnectionError(_("Could not connect to GitHub."))
+            raise Error(_("Could not connect to GitHub."))
     return r.content
 
 
@@ -703,7 +695,7 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
-    push("submit50", "cs50/problems2/foo/hello", "submit50")
+    # push("submit50", "cs50/problems2/foo/hello", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
