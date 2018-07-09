@@ -34,7 +34,7 @@ LOCAL_PATH = "~/.local/share/push50"
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
 
 
-def push(org, slug, tool, prompt=(lambda included, excluded: True)):
+def push(org, slug, tool, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists
     Returns username, commit hash
@@ -170,7 +170,7 @@ def prepare(org, branch, user, config):
             with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password:
                     child.expect("Password for .+:")
-                        child.sendline(user.password)
+                    child.sendline(user.password)
 
         except Error:
             if user.password:
