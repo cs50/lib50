@@ -633,8 +633,7 @@ def _authenticate_https(org):
                    password=password,
                    repo=f"https://{username}@github.com/{org}/{username}")
     except:
-        if username is not None:
-            logout(username)
+        logout(username)
         raise
 
 
@@ -685,10 +684,11 @@ def _prompt_password(prompt="Password: "):
 
 
 def logout(username):
-    try:
-        username = _run("git config --global credential.https://github.com/submit50.username")
-    except Error:
-        username = _prompt_username("GitHub username: ")
+    if username is not None:
+        try:
+            username = _run("git config --global credential.https://github.com/submit50.username")
+        except Error:
+            username = _prompt_username("GitHub username: ")
 
     _run("git config --global --unset credential.https://github.com/submit50.username")
 
