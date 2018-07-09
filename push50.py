@@ -3,12 +3,15 @@ import contextlib
 import copy
 import datetime
 import gettext
+import glob
 import itertools
 import logging
 import os
+from pathlib import Path
 import pkg_resources
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -16,16 +19,15 @@ import threading
 import termios
 import time
 import tty
-import glob
-import requests
-import pexpect
-import shlex
-import yaml
-from git import Git, GitError, Repo, SymbolicReference, NoSuchPathError
-from pathlib import Path
 
-#Git.GIT_PYTHON_TRACE = 1
-#logging.basicConfig(level="DEBUG")
+import attr
+from git import Git, GitError, Repo, SymbolicReference, NoSuchPathError
+import pexpect
+import requests
+import termcolor
+import yaml
+
+# logging.basicConfig(level="INFO")
 QUIET = False
 LOCAL_PATH = "~/.local/share/push50"
 
@@ -39,10 +41,10 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
     """
     check_dependencies()
 
-    tool_yaml = connect(slug, tool)
+    config = connect(slug, tool)
 
     with authenticate(org) as user:
-        with prepare(org, slug, user, tool_yaml) as repository:
+        with prepare(org, slug, user, config) as repository:
             if prompt(repository.included, repository.excluded):
                 return upload(repository, slug, user)
             else:
@@ -51,7 +53,7 @@ def push(org, slug, tool, prompt = (lambda included, excluded : True)):
 def local(slug, tool, update=True):
     """
     Create/update local copy of github.com/org/repo/branch
-    Returns path to local copy + tool_yaml
+    Returns path to local copy + config
     """
     # parse slug
     if update:
@@ -86,7 +88,7 @@ def local(slug, tool, update=True):
     try:
         with open(problem_path / ".cs50.yaml", "r") as f:
             try:
-                tool_yaml = yaml.safe_load(f.read())[tool]
+                config = yaml.safe_load(f.read())[tool]
             except KeyError:
                 raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
     except FileNotFoundError:
@@ -97,13 +99,13 @@ def local(slug, tool, update=True):
         # merge root .cs50.yaml with local .cs50.yaml
         try:
             with open(local_path / ".cs50.yaml", "r") as f:
-                root_yaml = yaml.safe_load(f.read())[tool]
+                root_config = yaml.safe_load(f.read())[tool]
         except (FileNotFoundError, KeyError):
             pass
         else:
-            tool_yaml = _merge_tool_yaml(tool_yaml, root_yaml)
+            config = _merge_config(config, root_config)
 
-    return problem_path, tool_yaml
+    return problem_path, config
 
 def connect(slug, tool):
     """
@@ -116,26 +118,24 @@ def connect(slug, tool):
         slug = Slug(slug)
 
         # get .cs50.yaml
-        cs50_yaml = yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))
-
-        # ensure tool exists
         try:
-            tool_yaml = cs50_yaml[tool]
-        except KeyError:
+            config = yaml.safe_load(_get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml"))[tool]
+        except (yaml.YAMLError, KeyError):
             raise InvalidSlug("Invalid slug for {}, did you mean something else?".format(tool))
+
 
         # get .cs50.yaml from root if exists and merge with local
         try:
-            root_yaml = yaml.safe_load(_get_content_from(slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
+            root_config = yaml.safe_load(_get_content(slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
         except (Error, KeyError):
             pass
         else:
-            tool_yaml = _merge_tool_yaml(tool_yaml, root_yaml)
+            config = _merge_config(config, root_config)
 
         # check that all required files are present
-        _check_required(tool_yaml)
+        _check_required(config)
 
-        return tool_yaml
+        return config
 
 @contextlib.contextmanager
 def authenticate(org):
@@ -145,18 +145,16 @@ def authenticate(org):
     returns: an authenticated User
     """
     with ProgressBar("Authenticating") as progress_bar:
-        # try authentication via SSH
-        try:
-            with _authenticate_ssh(org) as user:
-                yield user
-        except Error:
-            # else, authenticate via https, caching credentials
+        user = _authenticate_ssh(org)
+        if user is None:
             progress_bar.stop()
             with _authenticate_https(org) as user:
                 yield user
+        else:
+            yield user
 
 @contextlib.contextmanager
-def prepare(org, branch, user, tool_yaml):
+def prepare(org, branch, user, config):
     """
     Prepare git for pushing
     Check that there are no permission errors
@@ -170,16 +168,22 @@ def prepare(org, branch, user, tool_yaml):
 
         # clone just .git folder
         try:
-            _run(git(f"clone --bare {user.repo} {git_dir}"), stdin=[user.password])
+            with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
+                child.expect("Password for .+:")
+                if user.password:
+                    child.sendline(user.password)
+
         except Error:
             if user.password:
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
                             "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
             else:
-                e = Error(_("Looks like you have the wrong username in ~/.gitconfig or {} isn't yet enabled for your account. "
-                            "Double-check ~/.gitconfig and then log into https://cs50.me/ in a browser, "
+                e = Error(_("Looks {} isn't yet enabled for your account. "
+                            "Log into https://cs50.me/ in a browser, "
                             "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
             raise e
+        import pdb
+        pdb.set_trace()
 
         # shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
         with _shadow(".gitattributes") as hidden_gitattributes:
@@ -196,7 +200,7 @@ def prepare(org, branch, user, tool_yaml):
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
             # add exclude file
-            exclude = _convert_yaml_to_exclude(tool_yaml)
+            exclude = _create_exclude(config)
             exclude_path = f"{git_dir}/info/exclude"
             with open(exclude_path, "w") as f:
                 f.write(exclude + "\n")
@@ -245,7 +249,10 @@ def upload(repository, branch, user):
 
         # commit + push
         _run(repository.git(f"commit -m {commit_message} --allow-empty"))
-        _run(repository.git(f"push origin {branch}"), stdin=[user.password])
+        with _spawn(repository.git(f"push origin {branch}")) as child:
+            child.expect("Password for .+:")
+            if user.password:
+                child.sendline(password)
 
         commit_hash = _run(repository.git("rev-parse HEAD"))
         return user.name, commit_hash
@@ -276,8 +283,22 @@ class ConnectionError(Error):
 class InvalidSlug(Error):
     pass
 
-User = collections.namedtuple("User", ["name", "password", "email", "repo"])
-Repository = collections.namedtuple("Repository", ["git", "included", "excluded"])
+
+@attr.s
+class User:
+    name = attr.ib()
+    password = attr.ib()
+    repo = attr.ib()
+    email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
+                                         takes_self=True))
+
+
+@attr.s
+class Repository:
+    git = attr.ib()
+    included = attr.ib(default=[])
+    excluded = attr.ib(default=[])
+
 
 class Slug:
     def __init__(self, slug, offline=False):
@@ -342,7 +363,7 @@ class ProgressBar:
 
     def __enter__(self):
         def progress_runner():
-            print(self._message + "...", end="", flush=True)
+            print(f"{self._message}...", end="", flush=True)
             while self._progressing:
                 print(".", end="", flush=True)
                 time.sleep(0.5)
@@ -352,6 +373,9 @@ class ProgressBar:
             self._progressing = True
             self._thread = threading.Thread(target=progress_runner)
             self._thread.start()
+        else:
+            print(f"{self._message}...")
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -364,23 +388,22 @@ class _StreamToLogger:
     """
     def __init__(self, log, ignored_messages=tuple()):
         self._log = log
-        self._ignored = ignored_messages
+        # self._ignored = ignored_messages
 
     def write(self, message):
-        if message != '\n' and not any(ig in message for ig in self._ignored):
-            self._log(message)
+        self._log(message)
 
     def flush(self):
         pass
 
-def _run(command, stdin=tuple(), timeout=None):
-    """ Run a command, send stdin to command, returns command output """
 
+@contextlib.contextmanager
+def _spawn(command, timeout=None):
     # log command
-    logging.debug(command)
+    logging.info(termcolor.colored(command, attrs=["bold"]))
 
     # spawn command
-    child = pexpect.spawnu(
+    child = pexpect.spawn(
         command,
         encoding="utf-8",
         cwd=os.getcwd(),
@@ -388,25 +411,29 @@ def _run(command, stdin=tuple(), timeout=None):
         ignore_sighup=True,
         timeout=timeout)
 
-    # log command output, ignore any messages containing anything from stdin
-    child.logfile_read = _StreamToLogger(logging.debug, ignored_messages=stdin)
+    try:
+        # log command output, ignore any messages containing anything from stdin
+        child.logfile_read = _StreamToLogger(logging.info)
+        yield child
+    finally:
+        child.close()
 
-    # send stdin
-    for line in stdin:
-        child.sendline(line)
 
-    # read output, close process
-    command_output = child.read().strip()
-    child.close()
 
-    # check that command exited correctly
+def _run(command, timeout=None):
+    """ Run a command, returns command output """
+
+    with _spawn(command, timeout) as child:
+        command_output = child.read().strip()
+
     if child.signalstatus is None and child.exitstatus != 0:
-        logging.debug("git exited with {}".format(child.exitstatus))
+        logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
         raise Error()
 
     return command_output
 
-def _get_content_from(org, repo, branch, filepath):
+
+def _get_content(org, repo, branch, filepath):
     """ Get all content from org/repo/branch/filepath at GitHub """
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = requests.get(url)
@@ -417,7 +444,7 @@ def _get_content_from(org, repo, branch, filepath):
             raise ConnectionError(_("Could not connect to GitHub."))
     return r.content
 
-def _merge_tool_yaml(local, root):
+def _merge_config(local, root):
     """
     Merge local (tool specific part of .cs50.yaml at problem in repo)
     with root (tool specific part of .cs50.yaml at root of repo)
@@ -433,15 +460,13 @@ def _merge_tool_yaml(local, root):
             result[key] = local[key]
     return result
 
-def _check_required(tool_yaml):
+def _check_required(config):
     """ Check that all required files are present """
-    try:
-        tool_yaml["required"]
-    except KeyError:
+
+    if "required" not in config:
         return
 
-    # TODO old submit50 had support for dirs, do we want that?
-    missing = [f for f in tool_yaml["required"] if not os.path.isfile(f)]
+    missing = [f for f in config["required"] if not os.path.exists(f)]
 
     if missing:
         msg = "{}\n{}\n{}".format(
@@ -450,23 +475,23 @@ def _check_required(tool_yaml):
             _("Ensure you have the required files before submitting."))
         raise Error(msg)
 
-def _convert_yaml_to_exclude(tool_yaml):
+def _create_exclude(config):
     """
     Create a git exclude file from include + required key as per the tool's yaml entry in .cs50.yaml
         if no include key is given, all keys are included (exclude is empty)
     Includes are globbed and matched files are explicitly added to the exclude file
     """
-    if "include" not in tool_yaml:
+    if "include" not in config:
         return ""
 
     includes = []
-    for include in tool_yaml["include"]:
+    for include in config["include"]:
         includes += glob.glob(include)
 
-    if "required" in tool_yaml:
-        includes += [req for req in tool_yaml["required"] if req not in includes]
+    if "required" in config:
+        includes += [req for req in config["required"] if req not in includes]
 
-    return "*" + "".join([f"\n!{i}" for i in includes])
+    return "*\n" + "\n".join(f"!{i}" for i in includes)
 
 def _add_with_lfs(files, git):
     """
@@ -535,34 +560,31 @@ def _shadow(filepath):
     if is_shadowing:
         os.rename(hidden_path, filepath)
 
-@contextlib.contextmanager
 def _authenticate_ssh(org):
     """ Try authenticating via ssh, if succesful yields a User, otherwise raises Error """
     # require ssh-agent
-    child = pexpect.spawn("ssh git@github.com", encoding="utf8")
+    child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
     # github prints 'Hi {username}!...' when attempting to get shell access
     i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key", "Permission denied", "Are you sure you want to continue connecting"])
     child.close()
     if i == 0:
         username = child.match.groups()[0]
-        yield User(name=username,
+        return User(name=username,
                    password=None,
-                   email=f"{username}@users.noreply.github.com",
                    repo=f"git@github.com/{org}/{username}")
-    else:
-        raise Error("Could not authenticate over SSH")
 
 @contextlib.contextmanager
 def _authenticate_https(org):
     """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
-    git = Git()
-
     cache = Path("~/.git-credential-cache").expanduser()
     cache.mkdir(mode=0o700, exist_ok=True)
     socket = cache / "push50"
 
     try:
-        child = pexpect.spawn(f"git -c credential.helper='cache --socket {socket}' credential fill", encoding="utf8")
+        cmd = f"git -c credential.helper='cache --socket {socket}' credential fill"
+        logging.info(termcolor.colored(cmd, attrs=["bold"]))
+        child = pexpect.spawn(cmd, encoding="utf8")
+        child.logfile_read = _StreamToLogger(logging.info)
         child.sendline("")
 
         i = child.expect(["Username:", "Password:", "username=([^\r]+)\r\npassword=([^\r]+)"])
@@ -585,8 +607,8 @@ def _authenticate_https(org):
                         " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
 
         if res.status_code != 200:
-            logging.debug(res.headers)
-            logging.debug(res.text)
+            logging.info(res.headers)
+            logging.info(res.text)
             raise Error("Invalid username and/or password." if res.status_code == 401 else "Could not authenticate user.")
 
         # canonicalize (capitalization of) username,
@@ -595,20 +617,24 @@ def _authenticate_https(org):
 
         timeout = int(datetime.timedelta(weeks=1).total_seconds())
 
-        with _file_buffer([f"username={username}", f"password={password}"]) as f:
-            git(c=["credential.helper='cache --socket {socket} --timeout {timeout}",
-                   "credentialcache.ignoresighub=true"]).credential("approve", istream=f)
+        with _spawn(f"git -c credential.helper='cache --socket {socket} --timeout {timeout}' "
+                         "-c credentialcache.ignoresighub=true "
+                         "credential approve") as child:
+            child.sendline(f"username={username}")
+            child.sendline(f"password={password}")
+            child.sendline("")
+
 
         yield User(name=username,
                    password=password,
-                   email=f"{username}@users.noreply.github.com",
                    repo=f"https://{username}@github.com/{org}/{username}")
     except:
-        git.credential_cache(exit, socket=socket)
+        _run(f"git credential-cache --socket {socket} exit")
         try:
-            with _file_buffer(["host=github.com", "protocol=https"]) as f:
-                git.credential_osxkeychain("erase", istream=f)
-        except GitError:
+            with _spawn("git credential-osxkeychain erase") as child:
+                child.sendline("host=github.com")
+                child.sendline("protocol=https")
+        except Error:
             pass
         raise
 
@@ -661,7 +687,7 @@ def _get_password(prompt="Password: "):
 
 # TODO remove
 if __name__ == "__main__":
-    #push("submit50", "cs50/problems2/foo/hello", "submit50")
+    # push("submit50", "cs50/problems2/foo/hello", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
