@@ -27,6 +27,7 @@ import requests
 import termcolor
 import yaml
 
+logging.basicConfig(level="INFO")
 LOCAL_PATH = "~/.local/share/push50"
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
@@ -45,9 +46,9 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
     config = connect(slug, tool)
 
     with authenticate(org) as user:
-        with prepare(org, slug, user, config) as repository:
-            if prompt(repository.included, repository.excluded):
-                return upload(repository, slug, user)
+        with prepare(org, slug, user, config) as (included, excluded):
+            if prompt(included, excluded):
+                return upload(slug, user)
             else:
                 raise Error("No files were submitted.")
 
@@ -63,7 +64,7 @@ def local(slug, tool, offline=False):
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
-        git = _format_git(f"-C {local_path}", with_cache=False)
+        git = Git().set("-C {local_path}")
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -72,7 +73,7 @@ def local(slug, tool, offline=False):
             _run(git("fetch"))
     else:
         # clone repo to local_path
-        git = _format_git()
+        git = Git()
         _run(git(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
 
     problem_path = (local_path / slug.problem).absolute()
@@ -164,14 +165,15 @@ def prepare(org, branch, user, config):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        git_cache = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}")
-        git = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}", with_cache=False)
+        Git.work_tree = f"--work-tree={os.getcwd()}"
+        Git.git_dir = f"--git-dir={git_dir}"
+        git = Git().set(Git.work_tree).set(Git.git_dir)
 
         # clone just .git folder
         # import pdb
         # pdb.set_trace()
         try:
-            with _spawn(git_cache(f"clone --bare {user.repo} {git_dir}")) as child:
+            with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                     child.sendline(user.password)
         except Error:
@@ -233,10 +235,9 @@ def prepare(org, branch, user, config):
                 raise Error(_("No files in this directory are expected for submission."))
 
             progress_bar.stop()
-            yield Repository(git_cache, files, excluded_files)
+            yield files, excluded_files
 
-
-def upload(repository, branch, user):
+def upload(branch, user):
     """
     Commit + push to branch
     Returns username, commit hash
@@ -248,12 +249,13 @@ def upload(repository, branch, user):
         commit_message = commit_message.strftime("%Y%m%dT%H%M%SZ")
 
         # commit + push
-        _run(repository.git(f"commit -m {commit_message} --allow-empty"))
-        with _spawn(repository.git(f"push origin {branch}")) as child:
+        git = Git().set(Git.work_tree).set(Git.git_dir)
+        _run(git(f"commit -m {commit_message} --allow-empty"))
+        with _spawn(git.set(Git.cache)(f"push origin {branch}")) as child:
             if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                 child.sendline(user.password)
 
-        commit_hash = _run(repository.git("rev-parse HEAD"))
+        commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
 
@@ -287,13 +289,33 @@ class User:
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True))
 
+class Git:
+    cache = ""
+    git_dir = ""
+    work_tree = ""
 
-@attr.s
-class Repository:
-    git = attr.ib()
-    included = attr.ib(default=[])
-    excluded = attr.ib(default=[])
+    def __init__(self, args=[]):
+        self._args = args
 
+    def set(self, arg):
+        return Git(self._args + [arg])
+
+    def __call__(self, command):
+        git_command = f"git {' '.join(self._args)} {command}"
+
+        # format to show in git info
+        logged_command = git_command
+        for opt in [Git.cache, Git.git_dir, Git.work_tree]:
+            logged_command = logged_command.replace(opt, "")
+        logged_command = re.sub(' +', ' ', logged_command)
+
+        # log pretty command in info
+        logging.info(termcolor.colored(logged_command, attrs=["bold"]))
+
+        # log actual command in debug
+        logging.debug(git_command)
+        
+        return git_command
 
 class Slug:
     def __init__(self, slug, offline=False):
@@ -394,24 +416,8 @@ class _StreamToLogger:
     def flush(self):
         pass
 
-def _format_git(args="", with_cache=True):
-    """
-    Formats a git command with git_args
-    Returns a function that takes a git command and returns a formatted string representing that command with git_args
-    """
-    if with_cache:
-        cache_args = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        args = " ".join((cache_args, args))
-
-    def git(command):
-        return f"git {args} {command}"
-    return git
-
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
-    # log command
-    logging.info(termcolor.colored(command, attrs=["bold"]))
-
     # spawn command
     child = pexpect.spawn(
         command,
@@ -438,7 +444,7 @@ def _spawn(command, quiet=False, timeout=None):
                 break
         child.close()
         if child.signalstatus is None and child.exitstatus != 0:
-            logging.info("{} exited with {}".format(command, child.exitstatus))
+            logging.debug("{} exited with {}".format(command, child.exitstatus))
             raise Error()
 
 
@@ -606,7 +612,8 @@ def _authenticate_https(org):
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
 
     try:
-        git = _format_git()
+        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+        git = Git().set(Git.cache)
 
         with _spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
