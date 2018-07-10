@@ -60,10 +60,10 @@ def local(slug, tool, offline=False):
     # parse slug
     slug = Slug(slug, offline=offline)
 
-    local_path = Path(LOCAL_PATH) / slug.org / slug.repo
+    local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
-        git = _format_git(f"--git-dir={local_path / '.git'} --work-tree={local_path}")
+        git = _format_git(f"-C {local_path}", with_cache=False)
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -394,7 +394,7 @@ class _StreamToLogger:
     def flush(self):
         pass
 
-def _format_git(args="", with_cache = True):
+def _format_git(args="", with_cache=True):
     """
     Formats a git command with git_args
     Returns a function that takes a git command and returns a formatted string representing that command with git_args
@@ -438,7 +438,7 @@ def _spawn(command, quiet=False, timeout=None):
                 break
         child.close()
         if child.signalstatus is None and child.exitstatus != 0:
-            logging.info("{} exited with {}".format(shlex.quote(command), child.exitstatus))
+            logging.info("{} exited with {}".format(command, child.exitstatus))
             raise Error()
 
 
