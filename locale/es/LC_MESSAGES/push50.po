@@ -130,3 +130,6 @@ msgstr "Conectando"
 
 msgid "{} does not exist at {}/{}"
 msgstr "{} no existe en {}/{}"
+
+msgid "{} exited with {}"
+msgstr "{} terminó con {}"
