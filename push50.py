@@ -27,7 +27,6 @@ import requests
 import termcolor
 import yaml
 
-logging.basicConfig(level="INFO")
 LOCAL_PATH = "~/.local/share/push50"
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
@@ -418,7 +417,7 @@ def _spawn(command, quiet=False, timeout=None):
 
     try:
         if not quiet:
-            child.logfile_read = sys.stdout # _StreamToLogger(logging.debug)
+            child.logfile_read = _StreamToLogger(logging.debug)
         yield child
     except:
         child.close()
