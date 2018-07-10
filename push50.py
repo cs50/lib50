@@ -301,7 +301,8 @@ class Git:
 
     def __call__(self, command):
         git_command = f"git {' '.join(self._args)} {command}"
-
+        git_command = re.sub(' +', ' ', git_command)
+        
         # format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.git_dir, Git.work_tree]:
