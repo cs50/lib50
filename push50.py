@@ -33,7 +33,7 @@ LOCAL_PATH = "~/.local/share/push50"
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
 
 # Internationalization
-gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
+gettext.install("push50", pkg_resources.resource_filename("push50", "locale"))
 
 
 def push(org, slug, tool, prompt=lambda included, excluded: True):
@@ -50,7 +50,7 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
             if prompt(included, excluded):
                 return upload(slug, user)
             else:
-                raise Error("No files were submitted.")
+                raise Error(_("No files were submitted."))
 
 
 def local(slug, tool, offline=False):
@@ -79,7 +79,7 @@ def local(slug, tool, offline=False):
     problem_path = (local_path / slug.problem).absolute()
 
     if not problem_path.exists():
-        raise Error(f"{slug.problem} does not exist at {slug.org}/{slug.repo}")
+        raise Error(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
 
     # get tool_yaml
     try:
@@ -87,9 +87,9 @@ def local(slug, tool, offline=False):
             try:
                 config = yaml.safe_load(f.read())[tool]
             except KeyError:
-                raise Error("Invalid slug for {}, did you mean something else?".format(tool))
+                raise Error(_("Invalid slug for {}. Did you mean something else?").format(tool))
     except FileNotFoundError:
-        raise Error("Invalid slug, did you mean something else?")
+        raise Error(_("Invalid slug. Did you mean something else?"))
 
     # if problem is not referencing root of repo
     if slug.problem != Path("."):
@@ -111,7 +111,7 @@ def connect(slug, tool):
     Check that all required files as per .cs50.yaml are present
     returns tool specific portion of .cs50.yaml
     """
-    with ProgressBar("Connecting"):
+    with ProgressBar(_("Connecting")):
         # parse slug
         slug = Slug(slug)
 
@@ -120,7 +120,7 @@ def connect(slug, tool):
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml"))[tool]
         except (yaml.YAMLError, KeyError):
-            raise Error("Invalid slug for {}, did you mean something else?".format(tool))
+            raise Error(_("Invalid slug for {}. Did you mean something else?").format(tool))
 
         # get .cs50.yaml from root if exists and merge with local
         try:
@@ -144,7 +144,7 @@ def authenticate(org):
     Otherwise authenticate via HTTPS
     returns: an authenticated User
     """
-    with ProgressBar("Authenticating") as progress_bar:
+    with ProgressBar(_("Authenticating")) as progress_bar:
         user = _authenticate_ssh(org)
         if user is None:
             progress_bar.stop()
@@ -164,7 +164,7 @@ def prepare(org, branch, user, config):
     Stage files via lfs if necessary
     Check that atleast one file is staged
     """
-    with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
+    with ProgressBar(_("Preparing")) as progress_bar, tempfile.TemporaryDirectory() as git_dir:
         Git.work_tree = f"--work-tree={os.getcwd()}"
         Git.git_dir = f"--git-dir={git_dir}"
         git = Git().set(Git.work_tree).set(Git.git_dir)
@@ -181,9 +181,9 @@ def prepare(org, branch, user, config):
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
                             "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
             else:
-                e = Error(_("Looks {} isn't yet enabled for your account. "
+                e = Error(_("Looks {0} isn't yet enabled for your account. "
                             "Log into https://cs50.me/ in a browser, "
-                            "click \"Authorize application\" if prompted, and re-run {} here.".format(org, org)))
+                            "click \"Authorize application\" if prompted, and re-run {0} here.".format(org)))
             raise e
 
         # shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
@@ -242,7 +242,7 @@ def upload(branch, user):
     Commit + push to branch
     Returns username, commit hash
     """
-    with ProgressBar("Uploading"):
+    with ProgressBar(_("Uploading")):
         # decide on commit message
         headers = requests.get("https://api.github.com/").headers
         commit_message = datetime.datetime.strptime(headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
@@ -280,7 +280,6 @@ def check_dependencies():
 class Error(Exception):
     pass
 
-
 @attr.s
 class User:
     name = attr.ib()
@@ -314,7 +313,7 @@ class Git:
 
         # log actual command in debug
         logging.debug(git_command)
-        
+
         return git_command
 
 class Slug:
@@ -329,7 +328,7 @@ class Slug:
         # Find third "/" in identifier
         idx = slug.find("/", slug.find("/") + 1)
         if idx == -1:
-            raise Error("Invalid slug {}".format(slug))
+            raise Error(_("Invalid slug"))
 
         # split slug in <org>/<repo>/<remainder>
         remainder = slug[idx + 1:]
@@ -342,7 +341,7 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise Error("Invalid slug {}".format(slug))
+            raise Error(_("Invalid slug").format(slug))
 
     def _check_endings(self):
         """ check begin/end of slug, raises Error if malformed """
@@ -630,8 +629,8 @@ def _authenticate_https(org):
 
 
         if password is None:
-            username = _prompt_username("GitHub username: ")
-            password = _prompt_password("GitHub password: ")
+            username = _prompt_username(_("GitHub username: "))
+            password = _prompt_password(_("GitHub password: "))
 
         res = requests.get("https://api.github.com/user", auth=(username, password))
 
@@ -644,8 +643,8 @@ def _authenticate_https(org):
         if res.status_code != 200:
             logging.info(res.headers)
             logging.info(res.text)
-            raise Error("Invalid username and/or password." if res.status_code ==
-                        401 else "Could not authenticate user.")
+            raise Error(_("Invalid username and/or password.") if res.status_code ==
+                        401 else _("Could not authenticate user."))
 
         # canonicalize (capitalization of) username,
         # especially if user logged in via email address

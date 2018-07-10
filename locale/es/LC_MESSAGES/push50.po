@@ -1,0 +1,132 @@
+msgid ""
+msgstr ""
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2017-09-18 16:09+0000\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "GitHub username: "
+msgstr "Nombre de usuario de GitHub: "
+
+
+msgid "GitHub password: "
+msgstr "Contraseña de GitHub: "
+
+
+msgid "Invalid username and/or password."
+msgstr "Nombre de usuario y/o contraseña es inválido."
+
+
+msgid "Could not authenticate user."
+msgstr "No se pudo autenticar usuario."
+
+
+msgid "Could not connect to GitHub."
+msgstr "No se pudo conectar a GitHub."
+
+
+msgid "You don't have git. Install git, then re-run {}!"
+msgstr "No tienes git. ¡Instala git, y luego vuelve a ejecutar {}!"
+
+
+msgid "You have an old version of git. Install version 2.7 or later, then re-run {}!"
+msgstr "Tienes una versión antigua de git. ¡Instala la versión 2.7 o superior, y "
+"vuelve a ejecutar {}!"
+
+
+msgid "Invalid slug. Did you mean to submit something else?"
+msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
+
+msgid "Invalid slug for {}. Did you mean something else?"
+msgstr "El slug no es válido para {}. ¿Quisiste entregar algo más?"
+
+
+msgid ""
+"Invalid slug. Did you mean {}, without the leading and trailing slashes?"
+msgstr "El slug no es válido. ¿Querías decir {}, sin las barras la barra "
+"diagonal principal y la barra diagonal final?"
+
+msgid "Invalid slug"
+msgstr "El slug no es válido"
+
+msgid "Invalid slug. Did you mean {}, without the leading slash?"
+msgstr "El slug no es válido. ¿Querías decir {}, sin la barra diagonal principal?"
+
+
+msgid "Invalid slug. Did you mean {}, without the trailing slash?"
+msgstr "El slug no es válido. ¿Querías decir {}, sin la barra diagonal al final?"
+
+
+msgid "You seem to be missing these files:"
+msgstr "Parece que faltan estos archivos:"
+
+
+msgid "Ensure you have the required files before submitting."
+msgstr "Asegúrate de tener los archivos necesarios antes de entregar."
+
+
+msgid "Authenticating"
+msgstr "Autenticando"
+
+
+msgid "Preparing"
+msgstr "Preparando"
+
+
+msgid ""
+"Looks like {} isn't enabled for your account yet. Go to https://cs50.me/"
+"authorize and make sure you accept any pending invitations!"
+msgstr ""
+"Parece que {} todavia no esta habilitado en tu cuenta. Visita https://cs50."
+"me/authorize y asegúrate de aceptar las invitaciones pendientes!"
+
+
+msgid ""
+"Looks like {0} isn't enabled for your account. "
+"Log into https://cs50.me/ in a browser, "
+"click \"Authorize application\" if prompted, and re-run {} here" 
+msgstr ""
+"Parece que {0} aún no está hablitado para tu cuenta"
+"no está habilitado para tu cuenta. "
+"Ingresa en https://cs50.me/ en un navegador, haga clic en \"Authorize "
+"application\" si se te solicita, y vuelve a ejecutar {0} aquí."
+
+
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Remove these files from your directory and then re-run {}!"
+msgstr ""
+"Estos archivos son demasiado grandes para ser entregados:\n"
+"{}\n"
+"¡Quita estos archivos de tu directorio y luego vuelve a ejecutar: {}!"
+
+
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Install git-lfs (or remove these files from your directory) and then re-run "
+"{}!"
+msgstr ""
+"Estos archivos son demasiado grandes para ser entregados:\n"
+"{}\n"
+"Instala git-lfs (o quita estos archivos de tu directorio) y luego vuelve a "
+"ejecutar {}!"
+
+
+msgid "No files in this directory are expected for submission."
+msgstr "Ningún archivo en este directorio se espera para la entrega."
+
+
+msgid "No files were submitted."
+msgstr "No se ha entregado ningún archivo."
+
+
+msgid "Uploading"
+msgstr "Subiendo"
+
+msgid "Connecting"
+msgstr "Conectando"
+
+msgid "{} does not exist at {}/{}"
+msgstr "{} no existe en {}/{}"
