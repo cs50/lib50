@@ -164,16 +164,16 @@ def prepare(org, branch, user, config):
     Check that atleast one file is staged
     """
     with ProgressBar("Preparing") as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        git = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}")
+        git_cache = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}")
+        git = _format_git(f"--git-dir={git_dir} --work-tree={os.getcwd()}", with_cache=False)
 
         # clone just .git folder
         # import pdb
         # pdb.set_trace()
         try:
-            with _spawn(git(f"-c credential.helpers= -c credential.helpers='cache --socket {_CREDENTIAL_SOCKET}' clone --bare {user.repo} {git_dir}")) as child:
+            with _spawn(git_cache(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                     child.sendline(user.password)
-
         except Error:
             if user.password:
                 e = Error(_("Looks like {} isn't enabled for your account yet. "
@@ -233,7 +233,7 @@ def prepare(org, branch, user, config):
                 raise Error(_("No files in this directory are expected for submission."))
 
             progress_bar.stop()
-            yield Repository(git, files, excluded_files)
+            yield Repository(git_cache, files, excluded_files)
 
 
 def upload(repository, branch, user):
@@ -394,13 +394,17 @@ class _StreamToLogger:
     def flush(self):
         pass
 
-def _format_git(git_args="", old_git=lambda command, args="" : f"git {args} {command}"):
+def _format_git(args="", with_cache = True):
     """
     Formats a git command with git_args
     Returns a function that takes a git command and returns a formatted string representing that command with git_args
     """
-    def git(command, args=""):
-        return old_git(command, args=f"{args}{git_args}")
+    if with_cache:
+        cache_args = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+        args = " ".join((cache_args, args))
+
+    def git(command):
+        return f"git {args} {command}"
     return git
 
 @contextlib.contextmanager
@@ -602,7 +606,9 @@ def _authenticate_https(org):
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
 
     try:
-        with _spawn(f"git -c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}' credential fill", quiet=True) as child:
+        git = _format_git()
+
+        with _spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline("")
@@ -638,16 +644,13 @@ def _authenticate_https(org):
         # especially if user logged in via email address
         username = res.json()["login"]
 
-        timeout = int(datetime.timedelta(weeks=1).total_seconds())
-
-        with _spawn(f"git -c credential.helper='cache --socket {_CREDENTIAL_SOCKET} --timeout {timeout}' -c credentialcache.ignoresighup=true credential approve", quiet=True) as child:
+        with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline(f"path={org}/{username}")
             child.sendline(f"username={username}")
             child.sendline(f"password={password}")
             child.sendline("")
-
 
         yield User(name=username,
                    password=password,
@@ -702,11 +705,8 @@ def _prompt_password(prompt="Password: "):
 
     return bytes(password).decode()
 
-
 def logout():
     _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
-
-
 
 # TODO remove
 if __name__ == "__main__":
