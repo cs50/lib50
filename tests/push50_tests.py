@@ -1,6 +1,9 @@
 import unittest
 import os
+import io
+import time
 import pathlib
+import contextlib
 import shutil
 import sys
 import tempfile
@@ -142,6 +145,43 @@ class TestSlug(unittest.TestCase):
     def test_wrong_slug_offline(self):
         with self.assertRaises(push50.InvalidSlug):
             push50.Slug("cs50/does/not/exist", offline=True)
+
+class TestProgressBar(unittest.TestCase):
+    def test_progress(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            with push50.ProgressBar("foo"):
+                pass
+        self.assertTrue("foo..." in f.getvalue())
+
+    def test_progress_moving(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            try:
+                old_ticks_per_second = push50.ProgressBar.TICKS_PER_SECOND
+                push50.ProgressBar.TICKS_PER_SECOND = 100
+                with push50.ProgressBar("foo"):
+                    time.sleep(.5)
+            finally:
+                push50.ProgressBar.TICKS_PER_SECOND = old_ticks_per_second
+
+        self.assertTrue("foo...." in f.getvalue())
+
+    def test_disabled(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            try:
+                old_disabled = push50.ProgressBar.DISABLED
+                push50.ProgressBar.DISABLED = True
+                old_ticks_per_second = push50.ProgressBar.TICKS_PER_SECOND
+                push50.ProgressBar.TICKS_PER_SECOND = 100
+                with push50.ProgressBar("foo"):
+                    time.sleep(.5)
+            finally:
+                push50.ProgressBar.DISABLED = old_disabled
+                push50.ProgressBar.TICKS_PER_SECOND = old_ticks_per_second
+
+        self.assertEqual("foo...\n", f.getvalue())
 
 if __name__ == '__main__':
     unittest.main()

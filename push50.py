@@ -373,6 +373,7 @@ class Slug:
 class ProgressBar:
     """ Show a progress bar starting with message """
     DISABLED = False
+    TICKS_PER_SECOND = 2
 
     def __init__(self, message):
         self._message = message
@@ -390,7 +391,7 @@ class ProgressBar:
             print(f"{self._message}...", end="", flush=True)
             while self._progressing:
                 print(".", end="", flush=True)
-                time.sleep(0.5)
+                time.sleep(1 / ProgressBar.TICKS_PER_SECOND if ProgressBar.TICKS_PER_SECOND else 0)
             print()
 
         if not self.DISABLED:
