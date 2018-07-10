@@ -6,6 +6,7 @@ import sys
 import tempfile
 import logging
 import termcolor
+import subprocess
 
 import push50
 
@@ -24,9 +25,8 @@ class Base(unittest.TestCase):
         with open(self.filename, "w") as f:
             f.write(source)
 
-class TestGit(Base):
+class TestGit(unittest.TestCase):
     def setUp(self):
-        super().setUp()
         self.info_output = []
         self.debug_output = []
 
@@ -84,7 +84,20 @@ class TestGit(Base):
             push50.Git.git_dir = ""
             push50.Git.cache = ""
 
-class TestSlug(Base):
+class TestSlug(unittest.TestCase):
+    def test_wrong_format(self):
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("/cs50/problems2/foo/hello")
+
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("cs50/problems2/foo/hello/")
+
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("/cs50/problems2/foo/hello/")
+
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("cs50/problems2")
+
     def test_online(self):
         slug = push50.Slug("cs50/problems2/foo/hello")
         self.assertEqual(slug.slug, "cs50/problems2/foo/hello")
@@ -94,13 +107,41 @@ class TestSlug(Base):
         self.assertEqual(slug.problem, pathlib.Path("hello"))
 
     def test_wrong_slug_online(self):
-        pass
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("cs50/does/not/exist")
 
     def test_offline(self):
-        pass
+        try:
+            old_local_path = push50.LOCAL_PATH
+            old_wd = os.getcwd()
+
+            push50.LOCAL_PATH = tempfile.TemporaryDirectory().name
+            path = pathlib.Path(push50.LOCAL_PATH) / "foo" / "bar" / "baz"
+            os.makedirs(path)
+
+            os.chdir(pathlib.Path(push50.LOCAL_PATH) / "foo" / "bar")
+            subprocess.check_output(["git", "init"])
+
+            os.chdir(path)
+
+            with open(".cs50.yaml", "w") as f:
+                pass
+            subprocess.check_output(["git", "add", ".cs50.yaml"])
+            out = subprocess.check_output(["git", "commit", "-m", "qux"])
+
+            slug = push50.Slug("foo/bar/master/baz", offline=True)
+            self.assertEqual(slug.slug, "foo/bar/master/baz")
+            self.assertEqual(slug.org, "foo")
+            self.assertEqual(slug.repo, "bar")
+            self.assertEqual(slug.branch, "master")
+            self.assertEqual(slug.problem, pathlib.Path("baz"))
+        finally:
+            push50.LOCAL_PATH = old_local_path
+            os.chdir(old_wd)
 
     def test_wrong_slug_offline(self):
-        pass
+        with self.assertRaises(push50.InvalidSlug):
+            push50.Slug("cs50/does/not/exist", offline=True)
 
 if __name__ == '__main__':
     unittest.main()

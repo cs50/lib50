@@ -279,6 +279,9 @@ def check_dependencies():
 class Error(Exception):
     pass
 
+class InvalidSlug(Error):
+    pass
+
 @attr.s
 class User:
     name = attr.ib()
@@ -328,7 +331,7 @@ class Slug:
         # Find third "/" in identifier
         idx = slug.find("/", slug.find("/") + 1)
         if idx == -1:
-            raise Error(_("Invalid slug"))
+            raise InvalidSlug(_("Invalid slug"))
 
         # split slug in <org>/<repo>/<remainder>
         remainder = slug[idx + 1:]
@@ -341,25 +344,28 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise Error(_("Invalid slug").format(slug))
+            raise InvalidSlug(_("Invalid slug {}".format(slug)))
 
     def _check_endings(self):
         """ check begin/end of slug, raises Error if malformed """
         if self.slug.startswith("/") and self.slug.endswith("/"):
-            raise Error(
+            raise InvalidSlug(
                 _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
         elif self.slug.startswith("/"):
-            raise Error(
+            raise InvalidSlug(
                 _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
         elif self.slug.endswith("/"):
-            raise Error(
+            raise InvalidSlug(
                 _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
 
     def _get_branches(self):
         """ get branches from org/repo """
-        get_refs = f"git -C {Path(LOCAL_PATH) / self.org / self.repo} show-ref --heads" if self.offline else f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+        if self.offline:
+            get_refs = f"git -C {Path(LOCAL_PATH) / self.org / self.repo} show-ref --heads"
+        else:
+            get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
         try:
-            return (line.split("\t")[1].replace("refs/heads/", "") for line in _run(get_refs).split("\n"))
+            return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs).split("\n"))
         except Error:
             return []
 
