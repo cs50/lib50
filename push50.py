@@ -64,7 +64,7 @@ def local(slug, tool, offline=False):
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
-        git = Git().set("-C {local_path}")
+        git = Git("-C {local_path}")
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -73,8 +73,7 @@ def local(slug, tool, offline=False):
             _run(git("fetch"))
     else:
         # clone repo to local_path
-        git = Git()
-        _run(git(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
+        _run(Git()(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -167,7 +166,7 @@ def prepare(org, branch, user, config):
     with ProgressBar(_("Preparing")) as progress_bar, tempfile.TemporaryDirectory() as git_dir:
         Git.work_tree = f"--work-tree={os.getcwd()}"
         Git.git_dir = f"--git-dir={git_dir}"
-        git = Git().set(Git.work_tree).set(Git.git_dir)
+        git = Git(Git.work_tree, Git.git_dir)
 
         # clone just .git folder
         # import pdb
@@ -249,7 +248,7 @@ def upload(branch, user):
         commit_message = commit_message.strftime("%Y%m%dT%H%M%SZ")
 
         # commit + push
-        git = Git().set(Git.work_tree).set(Git.git_dir)
+        git = Git(Git.work_tree, Git.git_dir)
         _run(git(f"commit -m {commit_message} --allow-empty"))
         with _spawn(git.set(Git.cache)(f"push origin {branch}")) as child:
             if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
@@ -293,16 +292,16 @@ class Git:
     git_dir = ""
     work_tree = ""
 
-    def __init__(self, args=[]):
+    def __init__(self, *args):
         self._args = args
 
     def set(self, arg):
-        return Git(self._args + [arg])
+        return Git(*self._args, arg)
 
     def __call__(self, command):
         git_command = f"git {' '.join(self._args)} {command}"
         git_command = re.sub(' +', ' ', git_command)
-        
+
         # format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.git_dir, Git.work_tree]:
@@ -613,7 +612,7 @@ def _authenticate_https(org):
 
     try:
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = Git().set(Git.cache)
+        git = Git(Git.cache)
 
         with _spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
