@@ -22,15 +22,15 @@ import time
 import tty
 
 import attr
-import keyring
 import pexpect
 import requests
 import termcolor
 import yaml
 
-# logging.basicConfig(level="DEBUG")
-QUIET = True
+logging.basicConfig(level="INFO")
 LOCAL_PATH = "~/.local/share/push50"
+
+_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
 
 # Internationalization
 gettext.install("messages", pkg_resources.resource_filename("push50", "locale"))
@@ -171,7 +171,7 @@ def prepare(org, branch, user, config):
         # import pdb
         # pdb.set_trace()
         try:
-            with _spawn(git(f"clone --bare {user.repo} {git_dir}")) as child:
+            with _spawn(git(f"-c credential.helpers= -c credential.helpers='cache --socket {_CREDENTIAL_SOCKET}' clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                     child.sendline(user.password)
 
@@ -346,6 +346,7 @@ class Slug:
 
 class ProgressBar:
     """ Show a progress bar starting with message """
+    DISABLED = False
 
     def __init__(self, message):
         self._message = message
@@ -366,7 +367,7 @@ class ProgressBar:
                 time.sleep(0.5)
             print()
 
-        if not QUIET:
+        if not self.DISABLED:
             self._progressing = True
             self._thread = threading.Thread(target=progress_runner)
             self._thread.start()
@@ -394,17 +395,17 @@ class _StreamToLogger:
     def flush(self):
         pass
 
-def _format_git(git_args="", old_git=(lambda command, args="" : f"git -c credential.helper= {args} {command}")):
+def _format_git(git_args="", old_git=lambda command, args="" : f"git {args} {command}"):
     """
     Formats a git command with git_args
     Returns a function that takes a git command and returns a formatted string representing that command with git_args
     """
     def git(command, args=""):
-        return old_git(command, args=f"{args} {git_args}")
+        return old_git(command, args=f"{args}{git_args}")
     return git
 
 @contextlib.contextmanager
-def _spawn(command, timeout=None):
+def _spawn(command, quiet=False, timeout=None):
     # log command
     logging.info(termcolor.colored(command, attrs=["bold"]))
 
@@ -416,12 +417,14 @@ def _spawn(command, timeout=None):
         timeout=timeout)
 
     try:
-        child.logfile_read = _StreamToLogger(logging.debug)
+        if not quiet:
+            child.logfile_read = sys.stdout # _StreamToLogger(logging.debug)
         yield child
     except:
         child.close()
         raise
     else:
+        # Drain output from process while we wait for it to quit
         while child.isalive():
             try:
                 child.read_nonblocking(timeout=0)
@@ -436,10 +439,10 @@ def _spawn(command, timeout=None):
             raise Error()
 
 
-def _run(command, timeout=None):
+def _run(command, quiet=False, timeout=None):
     """ Run a command, returns command output """
 
-    with _spawn(command, timeout) as child:
+    with _spawn(command, quiet, timeout) as child:
         command_output = child.read().strip().replace("\r\n", "\n")
 
     return command_output
@@ -597,21 +600,25 @@ def _authenticate_ssh(org):
 def _authenticate_https(org):
     """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
 
-    cache = Path("~/.git-credential-cache").expanduser()
-    cache.mkdir(mode=0o700, exist_ok=True)
-    socket = cache / "push50"
+    _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
 
     try:
-        username = _run("git config --global credential.https://github.com/submit50.username")
-    except Error:
-        username = password = None
-    else:
-        password = keyring.get_password("push50", username)
+        with _spawn(f"git -c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}' credential fill", quiet=True) as child:
+            child.sendline("protocol=https")
+            child.sendline("host=github.com")
+            child.sendline("")
+            i = child.expect(["Username for '.+'", "Password for '.+'", "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
+            if i == 2:
+                username, password = child.match.groups()
+            else:
+                username = password = None
+                child.close()
+                # Prevent _spawn from throwing an error
+                child.exitstatus = 0
 
 
-    try:
         if password is None:
-            username = _prompt_username("GitHub username: ", prefill=username)
+            username = _prompt_username("GitHub username: ")
             password = _prompt_password("GitHub password: ")
 
         res = requests.get("https://api.github.com/user", auth=(username, password))
@@ -634,14 +641,20 @@ def _authenticate_https(org):
 
         timeout = int(datetime.timedelta(weeks=1).total_seconds())
 
-        _run(f"git config --global credential.https://github.com/submit50.username {username}")
-        keyring.set_password("push50", username, password)
+        with _spawn(f"git -c credential.helper='cache --socket {_CREDENTIAL_SOCKET} --timeout {timeout}' -c credentialcache.ignoresighup=true credential approve", quiet=True) as child:
+            child.sendline("protocol=https")
+            child.sendline("host=github.com")
+            child.sendline(f"path={org}/{username}")
+            child.sendline(f"username={username}")
+            child.sendline(f"password={password}")
+            child.sendline("")
+
 
         yield User(name=username,
                    password=password,
                    repo=f"https://{username}@github.com/{org}/{username}")
     except:
-        logout(username)
+        logout()
         raise
 
 
@@ -691,41 +704,14 @@ def _prompt_password(prompt="Password: "):
     return bytes(password).decode()
 
 
-def logout(username=None):
-    if username is not None:
-        try:
-            username = _run("git config --global credential.https://github.com/submit50.username")
-        except Error:
-            username = _prompt_username("GitHub username: ")
+def logout():
+    _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
 
-    _run("git config --global --unset credential.https://github.com/submit50.username")
-
-    try:
-        keyring.delete_password("push50", username)
-    except keyring.errors.PasswordDeleteError:
-        pass
-
-
-class DummyKeyring(keyring.backend.KeyringBackend):
-    """Faux keyring backend used when keyring cannot find a suitable default.
-    Essentially disables credential caching"""
-    def get_password(*args, **kwargs):
-        pass
-
-    def delete_password(*args, **kwargs):
-        pass
-
-    def set_password(*args, **kwargs):
-        pass
-
-
-if isinstance(keyring.get_keyring(), keyring.backends.fail.Keyring):
-    logging.info("no suitable credential keyrings found")
-    keyring.set_keyring(DummyKeyring())
 
 
 # TODO remove
 if __name__ == "__main__":
+    ProgressBar.DISABLED = True
     push("submit50", "cs50/problems2/foo/hello", "submit50")
 
     #LOCAL_PATH = "./test"
