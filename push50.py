@@ -53,13 +53,13 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
                 raise Error("No files were submitted.")
 
 
-def local(slug, tool, update=True):
+def local(slug, tool, offline=False):
     """
     Create/update local copy of github.com/org/repo/branch
     Returns path to local copy + config
     """
     # parse slug
-    slug = Slug(slug, offline=not update)
+    slug = Slug(slug, offline=offline)
 
     local_path = Path(LOCAL_PATH) / slug.org / slug.repo
 
@@ -68,8 +68,8 @@ def local(slug, tool, update=True):
         # switch to branch
         _run(git(f"checkout {slug.branch}"))
 
-        # pull new commits if update=True
-        if update:
+        if not offline:
+            # pull new commits
             _run(git("fetch"))
     else:
         # clone repo to local_path
