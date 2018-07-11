@@ -78,30 +78,18 @@ def local(slug, tool, offline=False):
     problem_path = (local_path / slug.problem).absolute()
 
     if not problem_path.exists():
-        raise Error(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
+        raise InvalidSlug(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
 
-    # get tool_yaml
+    # get config
     try:
         with open(problem_path / ".cs50.yaml", "r") as f:
-            try:
-                config = yaml.safe_load(f.read())[tool]
-            except KeyError:
-                raise Error(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            config = yaml.safe_load(f.read())
+            if tool not in config or not config[tool]:
+                raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
     except FileNotFoundError:
-        raise Error(_("Invalid slug. Did you mean something else?"))
+        raise InvalidSlug(_("Invalid slug. Did you mean something else?"))
 
-    # if problem is not referencing root of repo
-    if slug.problem != Path("."):
-        # merge root .cs50.yaml with local .cs50.yaml
-        try:
-            with open(local_path / ".cs50.yaml", "r") as f:
-                root_config = yaml.safe_load(f.read())[tool]
-        except (FileNotFoundError, KeyError):
-            pass
-        else:
-            config = _merge_config(config, root_config)
-
-    return problem_path, config
+    return problem_path
 
 
 def connect(slug, tool):
@@ -119,16 +107,7 @@ def connect(slug, tool):
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml"))[tool]
         except (yaml.YAMLError, KeyError):
-            raise Error(_("Invalid slug for {}. Did you mean something else?").format(tool))
-
-        # get .cs50.yaml from root if exists and merge with local
-        try:
-            root_config = yaml.safe_load(_get_content(
-                slug.org, slug.repo, slug.branch, ".cs50.yaml"))[tool]
-        except (Error, KeyError):
-            pass
-        else:
-            config = _merge_config(config, root_config)
+            raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
 
         # check that all required files are present
         _check_required(config)
@@ -275,6 +254,8 @@ def check_dependencies():
     if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
+def logout():
+    _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
 
 class Error(Exception):
     pass
@@ -469,28 +450,10 @@ def _get_content(org, repo, branch, filepath):
     r = requests.get(url)
     if not r.ok:
         if r.status_code == 404:
-            raise Error(_("Invalid slug. Did you mean to submit something else?"))
+            raise InvalidSlug(_("Invalid slug. Did you mean to submit something else?"))
         else:
             raise Error(_("Could not connect to GitHub."))
     return r.content
-
-
-def _merge_config(local, root):
-    """
-    Merge local (tool specific part of .cs50.yaml at problem in repo)
-    with root (tool specific part of .cs50.yaml at root of repo)
-    """
-    result = copy.deepcopy(root)
-
-    for key in local:
-        if key in root and isinstance(root[key], list):
-            # Note: References in .yaml become actual Python references once parsed
-            # Cannot use += here!
-            result[key] = result[key] + local[key]
-        else:
-            result[key] = local[key]
-    return result
-
 
 def _check_required(config):
     """ Check that all required files are present """
@@ -718,13 +681,10 @@ def _prompt_password(prompt="Password: "):
 
     return bytes(password).decode()
 
-def logout():
-    _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
-
 # TODO remove
 if __name__ == "__main__":
     ProgressBar.DISABLED = True
-    push("submit50", "cs50/problems2/foo/hello", "submit50")
+    push("submit50", "cs50/problems2/foo/bar", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))

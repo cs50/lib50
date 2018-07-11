@@ -90,24 +90,24 @@ class TestGit(unittest.TestCase):
 class TestSlug(unittest.TestCase):
     def test_wrong_format(self):
         with self.assertRaises(push50.InvalidSlug):
-            push50.Slug("/cs50/problems2/foo/hello")
+            push50.Slug("/cs50/problems2/foo/bar")
 
         with self.assertRaises(push50.InvalidSlug):
-            push50.Slug("cs50/problems2/foo/hello/")
+            push50.Slug("cs50/problems2/foo/bar/")
 
         with self.assertRaises(push50.InvalidSlug):
-            push50.Slug("/cs50/problems2/foo/hello/")
+            push50.Slug("/cs50/problems2/foo/bar/")
 
         with self.assertRaises(push50.InvalidSlug):
             push50.Slug("cs50/problems2")
 
     def test_online(self):
-        slug = push50.Slug("cs50/problems2/foo/hello")
-        self.assertEqual(slug.slug, "cs50/problems2/foo/hello")
+        slug = push50.Slug("cs50/problems2/foo/bar")
+        self.assertEqual(slug.slug, "cs50/problems2/foo/bar")
         self.assertEqual(slug.org, "cs50")
         self.assertEqual(slug.repo, "problems2")
         self.assertEqual(slug.branch, "foo")
-        self.assertEqual(slug.problem, pathlib.Path("hello"))
+        self.assertEqual(slug.problem, pathlib.Path("bar"))
 
     def test_wrong_slug_online(self):
         with self.assertRaises(push50.InvalidSlug):
@@ -182,6 +182,42 @@ class TestProgressBar(unittest.TestCase):
                 push50.ProgressBar.TICKS_PER_SECOND = old_ticks_per_second
 
         self.assertEqual("foo...\n", f.getvalue())
+
+class TestConnect(unittest.TestCase):
+    def test_connect(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            config = push50.connect("cs50/problems2/foo/bar", "check50")
+            self.assertEqual(config["dependencies"], ["pyyaml"])
+            self.assertEqual(config["include"], ["*.py"])
+            self.assertEqual(config["required"], ["hello.py"])
+        self.assertTrue("Connecting..." in f.getvalue())
+
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            config = push50.connect("cs50/problems2/foo/bar", "submit50")
+            self.assertTrue("dependencies" not in config)
+            self.assertEqual(config["include"], ["*.py"])
+            self.assertEqual(config["required"], ["hello.py"])
+        self.assertTrue("Connecting..." in f.getvalue())
+
+    def test_missing_problem(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            with self.assertRaises(push50.InvalidSlug):
+                push50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
+
+    def test_no_tool_in_config(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            with self.assertRaises(push50.InvalidSlug):
+                push50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
+
+    def test_no_config(self):
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            with self.assertRaises(push50.InvalidSlug):
+                push50.connect("cs50/problems2/foo/no_config", "check50")
 
 if __name__ == '__main__':
     unittest.main()
