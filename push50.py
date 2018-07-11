@@ -56,7 +56,7 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
 def local(slug, tool, offline=False):
     """
     Create/update local copy of github.com/org/repo/branch
-    Returns path to local copy + config
+    Returns path to local copy
     """
     # parse slug
     slug = Slug(slug, offline=offline)
