@@ -3,10 +3,10 @@ import contextlib
 import copy
 import datetime
 import gettext
-import glob
 import itertools
 import logging
 import os
+import glob
 from pathlib import Path
 import pkg_resources
 import re
@@ -93,6 +93,44 @@ def local(slug, tool, offline=False):
         raise InvalidSlug(_("Invalid slug. Did you mean something else?"))
 
     return problem_path
+
+
+def files(config, exclude=tuple()):
+    """
+    From config (exclude + required keys) decide which files are included and excluded
+    First exclude is interpeted as .gitignore
+    Then all entries from required are included
+    Finally any entries in the exclude optional arg are excluded
+    Returns included_files, excluded_files
+    """
+    if "exclude" not in config:
+        return glob.glob("*"), []
+
+    included = set(glob.glob("*"))
+    excluded = set()
+
+    for line in config["exclude"]:
+        if line.startswith("!"):
+            new_included = set(glob.glob(line[1:]))
+            excluded -= new_included
+            included.update(new_included)
+        else:
+            new_excluded = set(glob.glob(line))
+            included -= new_excluded
+            excluded.update(new_excluded)
+
+    if "required" in config:
+        for line in config["required"]:
+            new_included = set(glob.glob(line))
+            excluded -= new_included
+            included.update(new_included)
+
+    for line in exclude:
+        new_excluded = set(glob.glob(line[1:]))
+        included -= new_excluded
+        excluded.update(new_excluded)
+
+    return list(included), list(excluded)
 
 
 def connect(slug, tool):
@@ -188,41 +226,46 @@ def prepare(org, branch, user, config):
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
             # add exclude file
-            exclude = _create_exclude(config)
-            exclude_path = f"{git_dir}/info/exclude"
-            with open(exclude_path, "w") as f:
-                f.write(exclude + "\n")
-                f.write(".git*\n")
-                f.write(".lfs*\n")
-            _run(git(f"config core.excludesFile {exclude_path}"))
+            #exclude = _create_exclude(config)
+            #exclude_path = f"{git_dir}/info/exclude"
+            #with open(exclude_path, "w") as f:
+            #    f.write(exclude + "\n")
+            #    f.write(".git*\n")
+            #    f.write(".lfs*\n")
+            #_run(git(f"config core.excludesFile {exclude_path}"))
+            print(files(config, exclude=[".git*", ".lfs*"]))
+            included, excluded = files(config, exclude=[".git*", ".lfs*"])
+
+            for f in included:
+                _run(git(f"add {f}"))
 
             # add files to staging area
-            _run(git("add --all"))
+            #_run(git("add --all"))
 
             # get file lists
-            files = _run(git("ls-files")).split("\n")
-            excluded_files = _run(git("ls-files --other")).split("\n")
+            #files = _run(git("ls-files")).split("\n")
+            #excluded_files = _run(git("ls-files --other")).split("\n")
 
             # remove gitattributes from files
             if Path(".gitattributes").exists() and ".gitattributes" in files:
                 files.remove(".gitattributes")
 
             # remove the shadowed gitattributes from excluded_files
-            if hidden_gitattributes.name in excluded_files:
-                excluded_files.remove(hidden_gitattributes.name)
+            if hidden_gitattributes.name in excluded:
+                excluded.remove(hidden_gitattributes.name)
 
             # remove all empty strings from excluded_files
-            excluded_files = [f for f in excluded_files if f]
-
-            # add any oversized files through git-lfs
-            _lfs_add(files, git)
+            #excluded_files = [f for f in excluded_files if f]
 
             # check that at least 1 file is staged
-            if not files:
+            if not included:
                 raise Error(_("No files in this directory are expected for submission."))
 
+            # add any oversized files through git-lfs
+            _lfs_add(included, git)
+
             progress_bar.stop()
-            yield files, excluded_files
+            yield included, excluded
 
 def upload(branch, user):
     """
@@ -483,26 +526,6 @@ def _check_required(config):
             "\n".join(missing),
             _("Ensure you have the required files before submitting."))
         raise Error(msg)
-
-
-def _create_exclude(config):
-    """
-    Create a git exclude file from include + required key as per the tool's yaml entry in .cs50.yaml
-        if no include key is given, all keys are included (exclude is empty)
-    Includes are globbed and matched files are explicitly added to the exclude file
-    """
-    if "include" not in config:
-        return ""
-
-    includes = []
-    for include in config["include"]:
-        includes += glob.glob(include)
-
-    if "required" in config:
-        includes += [req for req in config["required"] if req not in includes]
-
-    return "*\n" + "\n".join(f"!{i}" for i in includes)
-
 
 def _lfs_add(files, git):
     """

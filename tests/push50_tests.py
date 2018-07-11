@@ -13,21 +13,6 @@ import subprocess
 
 import push50
 
-class Base(unittest.TestCase):
-    def setUp(self):
-        self.working_directory = tempfile.TemporaryDirectory()
-        os.chdir(self.working_directory.name)
-
-        self.filename = "foo.py"
-        self.write("")
-
-    def tearDown(self):
-        self.working_directory.cleanup()
-
-    def write(self, source):
-        with open(self.filename, "w") as f:
-            f.write(source)
-
 class TestGit(unittest.TestCase):
     def setUp(self):
         self.info_output = []
@@ -189,7 +174,7 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             config = push50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(config["dependencies"], ["pyyaml"])
-            self.assertEqual(config["include"], ["*.py"])
+            self.assertEqual(config["exclude"], ["*", "!*.py"])
             self.assertEqual(config["required"], ["hello.py"])
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -197,7 +182,7 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             config = push50.connect("cs50/problems2/foo/bar", "submit50")
             self.assertTrue("dependencies" not in config)
-            self.assertEqual(config["include"], ["*.py"])
+            self.assertEqual(config["exclude"], ["*", "!*.py"])
             self.assertEqual(config["required"], ["hello.py"])
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -218,6 +203,120 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             with self.assertRaises(push50.InvalidSlug):
                 push50.connect("cs50/problems2/foo/no_config", "check50")
+
+class TestFiles(unittest.TestCase):
+    def setUp(self):
+        self.working_directory = tempfile.TemporaryDirectory()
+        self._wd = os.getcwd()
+        os.chdir(self.working_directory.name)
+
+    def tearDown(self):
+        self.working_directory.cleanup()
+        os.chdir(self._wd)
+
+    def test_exclude_only_one(self):
+        config = {
+            "exclude" : ["foo.py"]
+        }
+
+        with open("foo.py", "w") as f:
+            pass
+        with open("bar.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"bar.py"})
+        self.assertEqual(set(excluded), {"foo.py"})
+
+    def test_exclude_all(self):
+        config = {
+            "exclude" : ["*"]
+        }
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), set())
+
+        with open("foo.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), {"foo.py"})
+
+    def test_include_only_one(self):
+        config = {
+            "exclude" : ["*", "!foo.py"]
+        }
+
+        with open("foo.py", "w") as f:
+            pass
+        with open("bar.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py"})
+        self.assertEqual(set(excluded), {"bar.py"})
+
+    def test_include_all(self):
+        config = {}
+
+        with open("foo.py", "w") as f:
+            pass
+        with open("bar.c", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py", "bar.c"})
+        self.assertEqual(set(excluded), set())
+
+        config = {
+            "exclude" : ["!*"]
+        }
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py", "bar.c"})
+        self.assertEqual(set(excluded), set())
+
+    def test_required(self):
+        config = {
+            "required" : ["foo.py"]
+        }
+
+        with open("foo.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py"})
+        self.assertEqual(set(excluded), set())
+
+        with open("bar.c", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py", "bar.c"})
+        self.assertEqual(set(excluded), set())
+
+    def test_required_overwrite_exclude(self):
+        config = {
+            "exclude" : ["*"],
+            "required" : ["foo.py"]
+        }
+
+        with open("foo.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py"})
+        self.assertEqual(set(excluded), set())
+
+        with open("bar.c", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo.py"})
+        self.assertEqual(set(excluded), {"bar.c"})
+
 
 if __name__ == '__main__':
     unittest.main()
