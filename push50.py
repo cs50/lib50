@@ -27,7 +27,10 @@ import requests
 import termcolor
 import yaml
 
-logging.basicConfig(level="INFO")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.NullHandler())
+
 LOCAL_PATH = "~/.local/share/push50"
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
@@ -105,9 +108,15 @@ def connect(slug, tool):
         # get .cs50.yaml
         try:
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
-                                                 slug.branch, slug.problem / ".cs50.yaml"))[tool]
-        except (yaml.YAMLError, KeyError):
+                                                 slug.branch, slug.problem / ".cs50.yaml")).get(tool)
+        except yaml.YAMLError:
             raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
+
+        if not config:
+            raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
+
+        if not isinstance(config, dict):
+            config = {}
 
         # check that all required files are present
         _check_required(config)
@@ -263,13 +272,14 @@ class Error(Exception):
 class InvalidSlug(Error):
     pass
 
-@attr.s
+@attr.s(slots=True)
 class User:
     name = attr.ib()
     password = attr.ib()
     repo = attr.ib()
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
-                                         takes_self=True))
+                                         takes_self=True),
+                    init=False)
 
 class Git:
     cache = ""
@@ -293,10 +303,10 @@ class Git:
         logged_command = re.sub(' +', ' ', logged_command)
 
         # log pretty command in info
-        logging.info(termcolor.colored(logged_command, attrs=["bold"]))
+        logger.info(termcolor.colored(logged_command, attrs=["bold"]))
 
         # log actual command in debug
-        logging.debug(git_command)
+        logger.debug(git_command)
 
         return git_command
 
@@ -346,7 +356,7 @@ class Slug:
         else:
             get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
         try:
-            return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs).split("\n"))
+            return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
         except Error:
             return []
 
@@ -375,7 +385,7 @@ class ProgressBar:
                 time.sleep(1 / ProgressBar.TICKS_PER_SECOND if ProgressBar.TICKS_PER_SECOND else 0)
             print()
 
-        if not self.DISABLED:
+        if not ProgressBar.DISABLED:
             self._progressing = True
             self._thread = threading.Thread(target=progress_runner)
             self._thread.start()
@@ -414,7 +424,7 @@ def _spawn(command, quiet=False, timeout=None):
 
     try:
         if not quiet:
-            child.logfile_read = _StreamToLogger(logging.debug)
+            child.logfile_read = _StreamToLogger(logger.debug)
         yield child
     except:
         child.close()
@@ -431,15 +441,19 @@ def _spawn(command, quiet=False, timeout=None):
                 break
         child.close()
         if child.signalstatus is None and child.exitstatus != 0:
-            logging.debug("{} exited with {}".format(command, child.exitstatus))
+            logger.debug("{} exited with {}".format(command, child.exitstatus))
             raise Error()
 
 
 def _run(command, quiet=False, timeout=None):
     """ Run a command, returns command output """
 
-    with _spawn(command, quiet, timeout) as child:
-        command_output = child.read().strip().replace("\r\n", "\n")
+    try:
+        with _spawn(command, quiet, timeout) as child:
+            command_output = child.read().strip().replace("\r\n", "\n")
+    except pexpect.TIMEOUT:
+        logger.info(f"command {command} timed out")
+        raise Error()
 
     return command_output
 
@@ -593,9 +607,7 @@ def _authenticate_https(org):
                 username, password = child.match.groups()
             else:
                 username = password = None
-                child.close()
-                # Prevent _spawn from throwing an error
-                child.exitstatus = 0
+                child.sendline("\n")
 
 
         if password is None:
@@ -611,8 +623,8 @@ def _authenticate_https(org):
                         " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
 
         if res.status_code != 200:
-            logging.info(res.headers)
-            logging.info(res.text)
+            logger.info(res.headers)
+            logger.info(res.text)
             raise Error(_("Invalid username and/or password.") if res.status_code ==
                         401 else _("Could not authenticate user."))
 
