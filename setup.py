@@ -1,4 +1,4 @@
-from setuptools import find_packages, setup
+from setuptools import setup
 
 import glob
 import os
@@ -32,7 +32,6 @@ setup(
     data_files=create_mo_files(),
     keywords=["push50"],
     name="push50",
-    packages=find_packages(),
     python_requires=">= 3.6",
     py_modules=["push50"],
     url="https://github.com/cs50/push50",
