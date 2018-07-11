@@ -27,8 +27,8 @@ import requests
 import termcolor
 import yaml
 
+logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.NullHandler())
 
 LOCAL_PATH = "~/.local/share/push50"
@@ -95,12 +95,12 @@ def local(slug, tool, offline=False):
     return problem_path
 
 
-def files(config, exclude=tuple()):
+def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     """
     From config (exclude + required keys) decide which files are included and excluded
     First exclude is interpeted as .gitignore
     Then all entries from required are included
-    Finally any entries in the exclude optional arg are excluded
+    Finally any entries in the always_exclude optional arg are excluded
     Returns included_files, excluded_files
     """
     if "exclude" not in config:
@@ -125,7 +125,7 @@ def files(config, exclude=tuple()):
             excluded -= new_included
             included.update(new_included)
 
-    for line in exclude:
+    for line in always_exclude:
         new_excluded = set(glob.glob(line[1:]))
         included -= new_excluded
         excluded.update(new_excluded)
@@ -226,11 +226,11 @@ def prepare(org, branch, user, config):
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
             # decide on files to include, exclude
-            included, excluded = files(config, exclude=[".git*", ".lfs*"])
+            included, excluded = files(config)
 
             # git add all included files
             for f in included:
-                _run(git(f"add {f}"))
+                _run(git(f"add --force {f}"))
 
             # remove gitattributes from files
             if Path(".gitattributes").exists() and ".gitattributes" in files:
@@ -599,7 +599,6 @@ def _authenticate_https(org):
     """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
 
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
-
     try:
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
         git = Git(Git.cache)
@@ -613,8 +612,8 @@ def _authenticate_https(org):
                 username, password = child.match.groups()
             else:
                 username = password = None
-                child.sendline("\n")
-
+                child.close()
+                child.exitstatus = 0
 
         if password is None:
             username = _prompt_username(_("GitHub username: "))
