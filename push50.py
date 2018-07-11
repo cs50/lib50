@@ -124,8 +124,8 @@ def authenticate(org):
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
         user = _authenticate_ssh(org)
+        progress_bar.stop()
         if user is None:
-            progress_bar.stop()
             with _authenticate_https(org) as user:
                 yield user
         else:
