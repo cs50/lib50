@@ -225,26 +225,12 @@ def prepare(org, branch, user, config):
             # switch to branch without checkout
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-            # add exclude file
-            #exclude = _create_exclude(config)
-            #exclude_path = f"{git_dir}/info/exclude"
-            #with open(exclude_path, "w") as f:
-            #    f.write(exclude + "\n")
-            #    f.write(".git*\n")
-            #    f.write(".lfs*\n")
-            #_run(git(f"config core.excludesFile {exclude_path}"))
-            print(files(config, exclude=[".git*", ".lfs*"]))
+            # decide on files to include, exclude
             included, excluded = files(config, exclude=[".git*", ".lfs*"])
 
+            # git add all included files
             for f in included:
                 _run(git(f"add {f}"))
-
-            # add files to staging area
-            #_run(git("add --all"))
-
-            # get file lists
-            #files = _run(git("ls-files")).split("\n")
-            #excluded_files = _run(git("ls-files --other")).split("\n")
 
             # remove gitattributes from files
             if Path(".gitattributes").exists() and ".gitattributes" in files:
@@ -253,9 +239,6 @@ def prepare(org, branch, user, config):
             # remove the shadowed gitattributes from excluded_files
             if hidden_gitattributes.name in excluded:
                 excluded.remove(hidden_gitattributes.name)
-
-            # remove all empty strings from excluded_files
-            #excluded_files = [f for f in excluded_files if f]
 
             # check that at least 1 file is staged
             if not included:

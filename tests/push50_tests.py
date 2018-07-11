@@ -18,15 +18,15 @@ class TestGit(unittest.TestCase):
         self.info_output = []
         self.debug_output = []
 
-        self.old_info = logging.info
+        self.old_info = push50.logger.info
         self.old_debug = logging.debug
 
-        logging.info = lambda msg : self.info_output.append(msg)
-        logging.debug = lambda msg : self.debug_output.append(msg)
+        push50.logger.info = lambda msg : self.info_output.append(msg)
+        push50.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
-        logging.info = self.old_info
-        logging.debug = self.old_debug
+        push50.logger.info = self.old_info
+        push50.logger.debug = self.old_debug
 
     def test_no_args(self):
         self.assertEqual(push50.Git()("foo"), "git foo")
