@@ -229,7 +229,6 @@ def prepare(org, branch, user, config):
             # switch to branch without checkout
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-            import pdb; pdb.set_trace()
             # decide on files to include, exclude
             included, excluded = files(config)
 
