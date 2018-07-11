@@ -27,7 +27,6 @@ import requests
 import termcolor
 import yaml
 
-logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -103,34 +102,41 @@ def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     Finally any entries in the always_exclude optional arg are excluded
     Returns included_files, excluded_files
     """
-    if "exclude" not in config:
-        return glob.glob("*"), []
-
     included = set(glob.glob("*"))
     excluded = set()
+    if "exclude" in config:
+        for line in config["exclude"]:
+            if line.startswith("!"):
+                new_included = set(glob.glob(line[1:]))
+                excluded -= new_included
+                included.update(new_included)
+            else:
+                new_excluded = set(glob.glob(line))
+                included -= new_excluded
+                excluded.update(new_excluded)
 
-    for line in config["exclude"]:
-        if line.startswith("!"):
-            new_included = set(glob.glob(line[1:]))
-            excluded -= new_included
-            included.update(new_included)
-        else:
-            new_excluded = set(glob.glob(line))
-            included -= new_excluded
-            excluded.update(new_excluded)
-
-    if "required" in config:
-        for line in config["required"]:
-            new_included = set(glob.glob(line))
-            excluded -= new_included
-            included.update(new_included)
+        if "required" in config:
+            for line in config["required"]:
+                new_included = set(glob.glob(line))
+                excluded -= new_included
+                included.update(new_included)
 
     for line in always_exclude:
         new_excluded = set(glob.glob(line[1:]))
         included -= new_excluded
         excluded.update(new_excluded)
 
-    return list(included), list(excluded)
+    # Exclude any file names that are not valid UTF-8
+    invalid = set()
+    for file in included:
+        try:
+            file.encode("utf8")
+        except UnicodeEncodeError:
+            excluded.add(file.encode("utf8", "replace").decode())
+            invalid.add(file)
+
+    included -= invalid
+    return included, excluded
 
 
 def connect(slug, tool):
@@ -195,8 +201,6 @@ def prepare(org, branch, user, config):
         git = Git(Git.work_tree, Git.git_dir)
 
         # clone just .git folder
-        # import pdb
-        # pdb.set_trace()
         try:
             with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
@@ -225,6 +229,7 @@ def prepare(org, branch, user, config):
             # switch to branch without checkout
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
+            import pdb; pdb.set_trace()
             # decide on files to include, exclude
             included, excluded = files(config)
 
@@ -701,7 +706,7 @@ def _prompt_password(prompt="Password: "):
 # TODO remove
 if __name__ == "__main__":
     ProgressBar.DISABLED = True
-    push("submit50", "cs50/problems2/foo/bar", "submit50")
+    push("submit50", "cs50/problems/2018/x/project", "submit50")
 
     #LOCAL_PATH = "./test"
     #print(local("cs50/problems2/master/hello", "check50"))
