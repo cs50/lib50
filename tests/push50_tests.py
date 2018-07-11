@@ -317,6 +317,43 @@ class TestFiles(unittest.TestCase):
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.c"})
 
+    def test_always_exclude(self):
+        config = {
+            "exclude" : ["!foo.py"]
+        }
+
+        with open("foo.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config, always_exclude=["foo.py"])
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), {"foo.py"})
+
+    def test_exclude_folder_include_file(self):
+        config = {
+            "exclude" : ["foo", "!foo/bar"]
+        }
+
+        os.mkdir("foo")
+        with open("foo/bar", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar"})
+        self.assertEqual(set(excluded), {"foo"})
+
+    def test_include_file_exclude_folder(self):
+        config = {
+            "exclude" : ["!foo/bar", "foo"]
+        }
+
+        os.mkdir("foo")
+        with open("foo/bar", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), {"foo"})
 
 if __name__ == '__main__':
     unittest.main()

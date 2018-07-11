@@ -104,42 +104,56 @@ def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     Finally any entries in the always_exclude optional arg are excluded
     Returns included_files, excluded_files
     """
-    included = set(glob.glob("*"))
-    excluded = set()
-    if "exclude" in config:
-        for line in config["exclude"]:
-            if line.startswith("!"):
-                new_included = set(glob.glob(line[1:]))
-                excluded -= new_included
-                included.update(new_included)
-            else:
-                new_excluded = set(glob.glob(line))
-                included -= new_excluded
-                excluded.update(new_excluded)
+    class Files:
+        def __init__(self, files=[]):
+            self._files = set(files)
 
-        if "required" in config:
-            for line in config["required"]:
-                new_included = set(glob.glob(line))
-                excluded -= new_included
-                included.update(new_included)
+        def __isub__(self, other):
+            for other_file in other._files:
+                if os.path.isdir(other_file):
+                    self._files = set([f for f in self._files if not f.startswith(other_file)])
+                if other_file in self._files:
+                    self._files.remove(other_file)
+            return self
+
+        def __iadd__(self, other):
+            for other_file in other._files:
+                if os.path.isdir(other_file):
+                    self._files = set([f for f in self._files if not f.startswith(other_file)])
+                self._files.add(other_file)
+            return self
+
+        def aslist(self):
+            return list(self._files)
+
+    included = Files(glob.glob("*"))
+    excluded = Files()
+
+    if "exclude" not in config:
+        return included.aslist(), excluded.aslist()
+
+    for line in config["exclude"]:
+        if line.startswith("!"):
+            new_included = Files(glob.glob(line[1:]))
+            excluded -= new_included
+            included += new_included
+        else:
+            new_excluded = Files(glob.glob(line))
+            included -= new_excluded
+            excluded += new_excluded
+
+    if "required" in config:
+        for line in config["required"]:
+            new_included = Files(glob.glob(line))
+            excluded -= new_included
+            included += new_included
 
     for line in always_exclude:
-        new_excluded = set(glob.glob(line[1:]))
+        new_excluded = Files(glob.glob(line))
         included -= new_excluded
-        excluded.update(new_excluded)
+        excluded += new_excluded
 
-    # Exclude any file names that are not valid UTF-8
-    invalid = set()
-    for file in included:
-        try:
-            file.encode("utf8")
-        except UnicodeEncodeError:
-            excluded.add(file.encode("utf8", "replace").decode())
-            invalid.add(file)
-
-    included -= invalid
-    return included, excluded
-
+    return included.aslist(), excluded.aslist()
 
 def connect(slug, tool):
     """
