@@ -74,16 +74,16 @@ class TestGit(unittest.TestCase):
 
 class TestSlug(unittest.TestCase):
     def test_wrong_format(self):
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("/cs50/problems2/foo/bar")
 
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("cs50/problems2/foo/bar/")
 
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("/cs50/problems2/foo/bar/")
 
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("cs50/problems2")
 
     def test_online(self):
@@ -95,7 +95,7 @@ class TestSlug(unittest.TestCase):
         self.assertEqual(slug.problem, pathlib.Path("bar"))
 
     def test_wrong_slug_online(self):
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("cs50/does/not/exist")
 
     def test_offline(self):
@@ -128,7 +128,7 @@ class TestSlug(unittest.TestCase):
             os.chdir(old_wd)
 
     def test_wrong_slug_offline(self):
-        with self.assertRaises(push50.InvalidSlug):
+        with self.assertRaises(push50.InvalidSlugError):
             push50.Slug("cs50/does/not/exist", offline=True)
 
 class TestProgressBar(unittest.TestCase):
@@ -189,19 +189,19 @@ class TestConnect(unittest.TestCase):
     def test_missing_problem(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlug):
+            with self.assertRaises(push50.InvalidSlugError):
                 push50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
 
     def test_no_tool_in_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlug):
+            with self.assertRaises(push50.InvalidSlugError):
                 push50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
 
     def test_no_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlug):
+            with self.assertRaises(push50.InvalidSlugError):
                 push50.connect("cs50/problems2/foo/no_config", "check50")
 
 class TestFiles(unittest.TestCase):
@@ -327,7 +327,7 @@ class TestFiles(unittest.TestCase):
 
         included, excluded = push50.files(config, always_exclude=["foo.py"])
         self.assertEqual(set(included), set())
-        self.assertEqual(set(excluded), {"foo.py"})
+        self.assertEqual(set(excluded), set())
 
     def test_exclude_folder_include_file(self):
         config = {
