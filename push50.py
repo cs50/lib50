@@ -106,25 +106,35 @@ def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     """
     class Files:
         def __init__(self, files=[]):
-            self._files = set(files)
+            self._files = set()
+            for f in files:
+                if os.path.isdir(f):
+                    self._files.update(self._expand_dir(f))
+                else:
+                    self._files.add(f)
+
+        def _expand_dir(self, dir):
+            return set(f for f in find(f"{dir}/**/*") if not os.path.isdir(f))
 
         def __isub__(self, other):
             for other_file in other._files:
-                if os.path.isdir(other_file):
-                    self._files = set([f for f in self._files if not f.startswith(other_file)])
                 if other_file in self._files:
                     self._files.remove(other_file)
             return self
 
         def __iadd__(self, other):
             for other_file in other._files:
-                if os.path.isdir(other_file):
-                    self._files = set([f for f in self._files if not f.startswith(other_file)])
                 self._files.add(other_file)
             return self
 
         def aslist(self):
             return list(self._files)
+
+    def find(pattern):
+        if "/" not in pattern and pattern.startswith("*"):
+            return glob.glob(f"**/{pattern}", recursive=True)
+        else:
+            return glob.glob(pattern, recursive=True)
 
     included = Files(glob.glob("*"))
     excluded = Files()
@@ -132,24 +142,27 @@ def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     if "exclude" not in config:
         return included.aslist(), excluded.aslist()
 
+    exclusion_rules = []
+
     for line in config["exclude"]:
         if line.startswith("!"):
-            new_included = Files(glob.glob(line[1:]))
+            exclusion_rules.append(line[1:])
+            new_included = Files(find(line[1:]))
             excluded -= new_included
             included += new_included
         else:
-            new_excluded = Files(glob.glob(line))
+            new_excluded = Files(find(line))
             included -= new_excluded
             excluded += new_excluded
 
     if "required" in config:
         for line in config["required"]:
-            new_included = Files(glob.glob(line))
+            new_included = Files(find(line))
             excluded -= new_included
             included += new_included
 
     for line in always_exclude:
-        new_excluded = Files(glob.glob(line))
+        new_excluded = Files(find(line))
         included -= new_excluded
         excluded += new_excluded
 

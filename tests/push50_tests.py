@@ -340,20 +340,115 @@ class TestFiles(unittest.TestCase):
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar"})
-        self.assertEqual(set(excluded), {"foo"})
+        self.assertEqual(set(excluded), set())
 
     def test_include_file_exclude_folder(self):
         config = {
-            "exclude" : ["!foo/bar", "foo"]
+            "exclude" : ["!foo/bar.py", "foo"]
         }
 
         os.mkdir("foo")
-        with open("foo/bar", "w") as f:
+        with open("foo/bar.py", "w") as f:
             pass
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), set())
-        self.assertEqual(set(excluded), {"foo"})
+        self.assertEqual(set(excluded), {"foo/bar.py"})
+
+    def test_exclude_extension_include_folder(self):
+        config = {
+            "exclude" : ["*.py", "!foo"]
+        }
+
+        os.mkdir("foo")
+        with open("foo/bar.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar.py"})
+        self.assertEqual(set(excluded), set())
+
+    def test_exclude_extension_include_everything_from_folder(self):
+        config = {
+            "exclude" : ["*.py", "!foo/*"]
+        }
+
+        os.mkdir("foo")
+        with open("foo/bar.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar.py"})
+        self.assertEqual(set(excluded), set())
+
+    def test_exclude_everything_include_folder(self):
+        config = {
+            "exclude" : ["*", "!foo"]
+        }
+
+        os.mkdir("foo")
+        with open("foo/bar.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar.py"})
+        self.assertEqual(set(excluded), set())
+
+    def test_implicit_recursive(self):
+        os.mkdir("foo")
+        with open("foo/bar.py", "w") as f:
+            pass
+
+        config = {
+            "exclude" : ["*.py"]
+        }
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), {"foo/bar.py"})
+
+        config = {
+            "exclude" : ["./*.py"]
+        }
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar.py"})
+        self.assertEqual(set(excluded), set())
+
+    def test_implicit_recursive_with_slash(self):
+        config = {
+            "exclude" : ["*/*.py"]
+        }
+
+        os.mkdir("foo")
+        os.mkdir("foo/bar")
+        with open("foo/bar/baz.py", "w") as f:
+            pass
+        with open("foo/qux.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"foo/bar/baz.py"})
+        self.assertEqual(set(excluded), {"foo/qux.py"})
+
+
+    def test_explicit_recursive(self):
+        config = {
+            "exclude" : ["foo/**/*.py"]
+        }
+
+        os.mkdir("foo")
+        os.mkdir("foo/bar")
+        os.mkdir("foo/bar/baz")
+        with open("foo/bar/baz/qux.py", "w") as f:
+            pass
+
+        with open("hello.py", "w") as f:
+            pass
+
+        included, excluded = push50.files(config)
+        self.assertEqual(set(included), {"hello.py"})
+        self.assertEqual(set(excluded), {"foo/bar/baz/qux.py"})
 
 if __name__ == '__main__':
     unittest.main()
