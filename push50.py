@@ -668,7 +668,7 @@ def _authenticate_https(org):
 
         res = requests.get("https://api.github.com/user", auth=(username, password))
 
-        # check for 2-factor authentication http://github3.readthedocs.io/en/develop/examples/oauth.html?highlight=token
+        # check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
         if "X-GitHub-OTP" in res.headers:
             raise Error("Looks like you have two-factor authentication enabled!"
                         " Please generate a personal access token and use it as your password."
