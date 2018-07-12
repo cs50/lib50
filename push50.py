@@ -41,7 +41,7 @@ gettext.install("push50", pkg_resources.resource_filename("push50", "locale"))
 
 def push(org, slug, tool, prompt=lambda included, excluded: True):
     """
-    Push to github.com/org/repo=username/slug if tool exists
+    Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
     check_dependencies()
@@ -58,24 +58,24 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
 
 def local(slug, tool, offline=False):
     """
-    Create/update local copy of github.com/org/repo/branch
+    Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
     """
-    # parse slug
+    # Parse slug
     slug = Slug(slug, offline=offline)
 
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
         git = Git("-C {local_path}")
-        # switch to branch
+        # Switch to branch
         _run(git(f"checkout {slug.branch}"))
 
         if not offline:
-            # pull new commits
+            # Pull new commits
             _run(git("fetch"))
     else:
-        # clone repo to local_path
+        # Clone repo to local_path
         _run(Git()(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
 
     problem_path = (local_path / slug.problem).absolute()
@@ -83,7 +83,7 @@ def local(slug, tool, offline=False):
     if not problem_path.exists():
         raise InvalidSlugError(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
 
-    # get config
+    # Get config
     try:
         with open(problem_path / ".cs50.yaml", "r") as f:
             config = yaml.safe_load(f.read())
@@ -171,13 +171,13 @@ def connect(slug, tool):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
-    returns tool specific portion of .cs50.yaml
+    Returns tool specific portion of .cs50.yaml
     """
     with ProgressBar(_("Connecting")):
-        # parse slug
+        # Parse slug
         slug = Slug(slug)
 
-        # get .cs50.yaml
+        # Get .cs50.yaml
         try:
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml")).get(tool)
@@ -190,7 +190,7 @@ def connect(slug, tool):
         if not isinstance(config, dict):
             config = {}
 
-        # check that all required files are present
+        # Check that all required files are present
         _check_required(config)
 
         return config
@@ -201,7 +201,7 @@ def authenticate(org):
     """
     Authenticate with GitHub via SSH if possible
     Otherwise authenticate via HTTPS
-    returns: an authenticated User
+    Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
         user = _authenticate_ssh(org)
@@ -228,7 +228,7 @@ def prepare(org, branch, user, config):
         Git.git_dir = f"--git-dir={git_dir}"
         git = Git(Git.work_tree, Git.git_dir)
 
-        # clone just .git folder
+        # Clone just .git folder
         try:
             with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} {git_dir}")) as child:
                 if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
@@ -243,40 +243,40 @@ def prepare(org, branch, user, config):
                             "click \"Authorize application\" if prompted, and re-run {0} here.".format(org)))
             raise e
 
-        # shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
+        # Shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
         with _shadow(".gitattributes") as hidden_gitattributes:
             try:
                 _run(git("checkout --force {} .gitattributes".format(branch)))
             except Error:
                 pass
 
-            # set user name/email in repo config
+            # Set user name/email in repo config
             _run(git(f"config user.email {shlex.quote(user.email)}"))
             _run(git(f"config user.name {shlex.quote(user.name)}"))
 
-            # switch to branch without checkout
+            # Switch to branch without checkout
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-            # decide on files to include, exclude
+            # Decide on files to include, exclude
             included, excluded = files(config)
 
-            # git add all included files
+            # Git add all included files
             for f in included:
                 _run(git(f"add --force {f}"))
 
-            # remove gitattributes from files
+            # Remove gitattributes from files
             if Path(".gitattributes").exists() and ".gitattributes" in files:
                 files.remove(".gitattributes")
 
-            # remove the shadowed gitattributes from excluded_files
+            # Remove the shadowed gitattributes from excluded_files
             if hidden_gitattributes.name in excluded:
                 excluded.remove(hidden_gitattributes.name)
 
-            # check that at least 1 file is staged
+            # Check that at least 1 file is staged
             if not included:
                 raise Error(_("No files in this directory are expected for submission."))
 
-            # add any oversized files through git-lfs
+            # Add any oversized files through git-lfs
             _lfs_add(included, git)
 
             progress_bar.stop()
@@ -289,12 +289,12 @@ def upload(branch, user):
     Returns username, commit hash
     """
     with ProgressBar(_("Uploading")):
-        # decide on commit message
+        # Decide on commit message
         commit_header = _("automated commit by {}").format(tool)
         commit_body = json.dumps({"LANGUAGE": os.environ.get("LANGUAGE")})
         commit_message = f"{commit_header}\n\n{commit_body}"
 
-        # commit + push
+        # Commit + push
         git = Git(Git.work_tree, Git.git_dir)
         _run(git(f"commit -m {commit_message} --allow-empty"))
         with _spawn(git.set(Git.cache)(f"push origin {branch}")) as child:
@@ -312,11 +312,11 @@ def check_dependencies():
         https://github.com/git/git/blob/v2.7.0/credential-cache--daemon.c
     """
 
-    # check that git is installed
+    # Check that git is installed
     if not shutil.which("git"):
         raise Error(_("You don't have git. Install git, then re-run!"))
 
-    # check that git --version > 2.7
+    # Check that git --version > 2.7
     version = subprocess.check_output(["git", "--version"]).decode("utf-8")
     matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
     if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
@@ -367,16 +367,16 @@ class Git:
         git_command = f"git {' '.join(self._args)} {command}"
         git_command = re.sub(' +', ' ', git_command)
 
-        # format to show in git info
+        # Format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.git_dir, Git.work_tree]:
             logged_command = logged_command.replace(opt, "")
         logged_command = re.sub(' +', ' ', logged_command)
 
-        # log pretty command in info
+        # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
 
-        # log actual command in debug
+        # Log actual command in debug
         logger.debug(git_command)
 
         return git_command
@@ -384,11 +384,11 @@ class Git:
 
 class Slug:
     def __init__(self, slug, offline=False):
-        """ parse <org>/<repo>/<branch>/<problem_dir> from slug """
+        """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
         self.slug = slug
         self.offline = offline
 
-        # assert begin/end of slug are correct
+        # Assert begin/end of slug are correct
         self._check_endings()
 
         # Find third "/" in identifier
@@ -396,11 +396,11 @@ class Slug:
         if idx == -1:
             raise InvalidSlugError(_("Invalid slug"))
 
-        # split slug in <org>/<repo>/<remainder>
+        # Split slug in <org>/<repo>/<remainder>
         remainder = slug[idx + 1:]
         self.org, self.repo = slug.split("/")[:2]
 
-        # find a matching branch
+        # Find a matching branch
         for branch in self._get_branches():
             if remainder.startswith(f"{branch}"):
                 self.branch = branch
@@ -410,7 +410,7 @@ class Slug:
             raise InvalidSlugError(_("Invalid slug {}".format(slug)))
 
     def _check_endings(self):
-        """ check begin/end of slug, raises Error if malformed """
+        """Check begin/end of slug, raises Error if malformed."""
         if self.slug.startswith("/") and self.slug.endswith("/"):
             raise InvalidSlugError(
                 _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
@@ -422,7 +422,7 @@ class Slug:
                 _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
 
     def _get_branches(self):
-        """ get branches from org/repo """
+        """Get branches from org/repo."""
         if self.offline:
             get_refs = f"git -C {Path(LOCAL_PATH) / self.org / self.repo} show-ref --heads"
         else:
@@ -434,7 +434,7 @@ class Slug:
 
 
 class ProgressBar:
-    """ Show a progress bar starting with message """
+    """Show a progress bar starting with message."""
     DISABLED = False
     TICKS_PER_SECOND = 2
 
@@ -444,7 +444,7 @@ class ProgressBar:
         self._thread = None
 
     def stop(self):
-        """Stop the progress bar"""
+        """Stop the progress bar."""
         if self._progressing:
             self._progressing = False
             self._thread.join()
@@ -471,10 +471,7 @@ class ProgressBar:
 
 
 class _StreamToLogger:
-    """
-    Send all that enters the stream to log-function
-    """
-
+    """Send all that enters the stream to log-function."""
     def __init__(self, log):
         self._log = log
 
@@ -489,7 +486,7 @@ class _StreamToLogger:
 
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
-    # spawn command
+    # Spawn command
     child = pexpect.spawn(
         command,
         encoding="utf-8",
@@ -520,8 +517,7 @@ def _spawn(command, quiet=False, timeout=None):
 
 
 def _run(command, quiet=False, timeout=None):
-    """ Run a command, returns command output """
-
+    """Run a command, returns command output."""
     try:
         with _spawn(command, quiet, timeout) as child:
             command_output = child.read().strip().replace("\r\n", "\n")
@@ -533,7 +529,7 @@ def _run(command, quiet=False, timeout=None):
 
 
 def _get_content(org, repo, branch, filepath):
-    """ Get all content from org/repo/branch/filepath at GitHub """
+    """Get all content from org/repo/branch/filepath at GitHub."""
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = requests.get(url)
     if not r.ok:
@@ -545,7 +541,7 @@ def _get_content(org, repo, branch, filepath):
 
 
 def _check_required(config):
-    """ Check that all required files are present """
+    """Check that all required files are present."""
 
     if "required" not in config:
         return
@@ -558,10 +554,10 @@ def _check_required(config):
 
 def _lfs_add(files, git):
     """
-    Add any oversized files with lfs
-    Throws error if a file is bigger than 2GB or git-lfs is not installed
+    Add any oversized files with lfs.
+    Throws error if a file is bigger than 2GB or git-lfs is not installed.
     """
-    # check for large files > 100 MB (and huge files > 2 GB)
+    # Check for large files > 100 MB (and huge files > 2 GB)
     # https://help.github.com/articles/conditions-for-large-files/
     # https://help.github.com/articles/about-git-large-file-storage/
     larges, huges = [], []
@@ -572,27 +568,27 @@ def _lfs_add(files, git):
         elif size > (2 * 1024 * 1024 * 1024):
             huges.append(file)
 
-    # raise Error if a file is >2GB
+    # Raise Error if a file is >2GB
     if huges:
         raise Error(_("These files are too large to be submitted:\n{}\n"
                       "Remove these files from your directory "
                       "and then re-run {}!").format("\n".join(huges), org))
 
-    # add large files (>100MB) with git-lfs
+    # Add large files (>100MB) with git-lfs
     if larges:
-        # raise Error if git-lfs not installed
+        # Raise Error if git-lfs not installed
         if not shutil.which("git-lfs"):
             raise Error(_("These files are too large to be submitted:\n{}\n"
                           "Install git-lfs (or remove these files from your directory) "
                           "and then re-run!").format("\n".join(larges)))
 
-        # install git-lfs for this repo
+        # Install git-lfs for this repo
         _run(git("lfs install --local"))
 
-        # for pre-push hook
+        # For pre-push hook
         _run(git("config credential.helper cache"))
 
-        # rm previously added file, have lfs track file, add file again
+        # Rm previously added file, have lfs track file, add file again
         for large in larges:
             _run(git("rm --cached {}".format(shlex.quote(large))))
             _run(git("lfs track {}".format(shlex.quote(large))))
@@ -626,10 +622,10 @@ def _shadow(filepath):
 
 
 def _authenticate_ssh(org):
-    """ Try authenticating via ssh, if succesful yields a User, otherwise raises Error """
-    # require ssh-agent
+    """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
+    # Require ssh-agent
     child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
-    # github prints 'Hi {username}!...' when attempting to get shell access
+    # GitHub prints 'Hi {username}!...' when attempting to get shell access
     i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key",
                       "Permission denied", "Are you sure you want to continue connecting"])
     child.close()
@@ -642,8 +638,7 @@ def _authenticate_ssh(org):
 
 @contextlib.contextmanager
 def _authenticate_https(org):
-    """ Try authenticating via HTTPS, if succesful yields User, otherwise raises Error """
-
+    """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
@@ -668,7 +663,7 @@ def _authenticate_https(org):
 
         res = requests.get("https://api.github.com/user", auth=(username, password))
 
-        # check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
+        # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
         if "X-GitHub-OTP" in res.headers:
             raise Error("Looks like you have two-factor authentication enabled!"
                         " Please generate a personal access token and use it as your password."
@@ -680,8 +675,8 @@ def _authenticate_https(org):
             raise Error(_("Invalid username and/or password.") if res.status_code ==
                         401 else _("Could not authenticate user."))
 
-        # canonicalize (capitalization of) username,
-        # especially if user logged in via email address
+        # Canonicalize (capitalization of) username,
+        # Especially if user logged in via email address
         username = res.json()["login"]
 
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
@@ -701,7 +696,7 @@ def _authenticate_https(org):
 
 
 def _prompt_username(prompt="Username: ", prefill=None):
-    """ Prompt the user for username """
+    """Prompt the user for username."""
     if prefill:
         readline.set_startup_hook(lambda: readline.insert_text(prefill))
 
@@ -714,7 +709,7 @@ def _prompt_username(prompt="Username: ", prefill=None):
 
 
 def _prompt_password(prompt="Password: "):
-    """ Prompt the user for password """
+    """Prompt the user for password."""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     tty.setraw(fd)
@@ -724,7 +719,7 @@ def _prompt_password(prompt="Password: "):
     try:
         while True:
             ch = sys.stdin.buffer.read(1)[0]
-            if ch in (ord("\r"), ord("\n"), 4):  # if user presses Enter or ctrl-d
+            if ch in (ord("\r"), ord("\n"), 4):  # If user presses Enter or ctrl-d
                 print("\r")
                 break
             elif ch == 127:  # DEL
