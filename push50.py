@@ -81,22 +81,22 @@ def local(slug, tool, offline=False):
     problem_path = (local_path / slug.problem).absolute()
 
     if not problem_path.exists():
-        raise InvalidSlug(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
+        raise InvalidSlugError(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
 
     # get config
     try:
         with open(problem_path / ".cs50.yaml", "r") as f:
             config = yaml.safe_load(f.read())
             if tool not in config or not config[tool]:
-                raise InvalidSlug(
+                raise InvalidSlugError(
                     _("Invalid slug for {}. Did you mean something else?").format(tool))
     except FileNotFoundError:
-        raise InvalidSlug(_("Invalid slug. Did you mean something else?"))
+        raise InvalidSlugError(_("Invalid slug. Did you mean something else?"))
 
     return problem_path
 
 
-def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
+def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
     From config (exclude + required keys) decide which files are included and excluded
     First exclude is interpeted as .gitignore
@@ -164,7 +164,6 @@ def files(config, always_exclude=[".git*", ".lfs*", ".c9*", ".~c9*"]):
     for line in always_exclude:
         new_excluded = Files(find(line))
         included -= new_excluded
-        excluded += new_excluded
 
     return included.aslist(), excluded.aslist()
 
@@ -183,10 +182,10 @@ def connect(slug, tool):
             config = yaml.safe_load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml")).get(tool)
         except yaml.YAMLError:
-            raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
 
         if not config:
-            raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
 
         if not isinstance(config, dict):
             config = {}
@@ -331,9 +330,16 @@ def logout():
 class Error(Exception):
     pass
 
-
-class InvalidSlug(Error):
+class InvalidSlugError(Error):
     pass
+
+class MissingFilesError(Error):
+    def __init__(self, files):
+        super().__init__("{}\n{}\n{}".format(
+            _("You seem to be missing these required files:"),
+            "\n".join(files),
+            _("You are currently in: {}, did you perhaps intend another directory?".format(os.getcwd()))
+        ))
 
 
 @attr.s(slots=True)
@@ -388,7 +394,7 @@ class Slug:
         # Find third "/" in identifier
         idx = slug.find("/", slug.find("/") + 1)
         if idx == -1:
-            raise InvalidSlug(_("Invalid slug"))
+            raise InvalidSlugError(_("Invalid slug"))
 
         # split slug in <org>/<repo>/<remainder>
         remainder = slug[idx + 1:]
@@ -401,18 +407,18 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlug(_("Invalid slug {}".format(slug)))
+            raise InvalidSlugError(_("Invalid slug {}".format(slug)))
 
     def _check_endings(self):
         """ check begin/end of slug, raises Error if malformed """
         if self.slug.startswith("/") and self.slug.endswith("/"):
-            raise InvalidSlug(
+            raise InvalidSlugError(
                 _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
         elif self.slug.startswith("/"):
-            raise InvalidSlug(
+            raise InvalidSlugError(
                 _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
         elif self.slug.endswith("/"):
-            raise InvalidSlug(
+            raise InvalidSlugError(
                 _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
 
     def _get_branches(self):
@@ -532,7 +538,7 @@ def _get_content(org, repo, branch, filepath):
     r = requests.get(url)
     if not r.ok:
         if r.status_code == 404:
-            raise InvalidSlug(_("Invalid slug. Did you mean to submit something else?"))
+            raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
         else:
             raise Error(_("Could not connect to GitHub."))
     return r.content
@@ -547,11 +553,7 @@ def _check_required(config):
     missing = [f for f in config["required"] if not os.path.exists(f)]
 
     if missing:
-        msg = "{}\n{}\n{}".format(
-            _("You seem to be missing these files:"),
-            "\n".join(missing),
-            _("Ensure you have the required files before submitting."))
-        raise Error(msg)
+        raise MissingFilesError(missing)
 
 
 def _lfs_add(files, git):
