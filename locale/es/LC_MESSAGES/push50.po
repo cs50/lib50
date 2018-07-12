@@ -133,3 +133,6 @@ msgstr "{} no existe en {}/{}"
 
 msgid "{} exited with {}"
 msgstr "{} terminó con {}"
+
+msgid "automated commit by {}"
+msgstr "confirmación automatizada por {}"

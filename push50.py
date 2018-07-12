@@ -4,6 +4,7 @@ import copy
 import datetime
 import gettext
 import itertools
+import json
 import logging
 import os
 import glob
@@ -50,7 +51,7 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
     with authenticate(org) as user:
         with prepare(org, slug, user, config) as (included, excluded):
             if prompt(included, excluded):
-                return upload(slug, user)
+                return upload(slug, user, tool)
             else:
                 raise Error(_("No files were submitted."))
 
@@ -87,7 +88,8 @@ def local(slug, tool, offline=False):
         with open(problem_path / ".cs50.yaml", "r") as f:
             config = yaml.safe_load(f.read())
             if tool not in config or not config[tool]:
-                raise InvalidSlug(_("Invalid slug for {}. Did you mean something else?").format(tool))
+                raise InvalidSlug(
+                    _("Invalid slug for {}. Did you mean something else?").format(tool))
     except FileNotFoundError:
         raise InvalidSlug(_("Invalid slug. Did you mean something else?"))
 
@@ -254,6 +256,7 @@ def prepare(org, branch, user, config):
             progress_bar.stop()
             yield included, excluded
 
+
 def upload(branch, user):
     """
     Commit + push to branch
@@ -261,9 +264,9 @@ def upload(branch, user):
     """
     with ProgressBar(_("Uploading")):
         # decide on commit message
-        headers = requests.get("https://api.github.com/").headers
-        commit_message = datetime.datetime.strptime(headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
-        commit_message = commit_message.strftime("%Y%m%dT%H%M%SZ")
+        commit_header = _("automated commit by {}").format(tool)
+        commit_body = json.dumps({"LANGUAGE": os.environ.get("LANGUAGE")})
+        commit_message = f"{commit_header}\n\n{commit_body}"
 
         # commit + push
         git = Git(Git.work_tree, Git.git_dir)
@@ -293,14 +296,18 @@ def check_dependencies():
     if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
+
 def logout():
     _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
+
 
 class Error(Exception):
     pass
 
+
 class InvalidSlug(Error):
     pass
+
 
 @attr.s(slots=True)
 class User:
@@ -310,6 +317,7 @@ class User:
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
                     init=False)
+
 
 class Git:
     cache = ""
@@ -339,6 +347,7 @@ class Git:
         logger.debug(git_command)
 
         return git_command
+
 
 class Slug:
     def __init__(self, slug, offline=False):
@@ -427,6 +436,7 @@ class ProgressBar:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
+
 class _StreamToLogger:
     """
     Send all that enters the stream to log-function
@@ -442,6 +452,7 @@ class _StreamToLogger:
 
     def flush(self):
         pass
+
 
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
@@ -499,6 +510,7 @@ def _get_content(org, repo, branch, filepath):
             raise Error(_("Could not connect to GitHub."))
     return r.content
 
+
 def _check_required(config):
     """ Check that all required files are present """
 
@@ -513,6 +525,7 @@ def _check_required(config):
             "\n".join(missing),
             _("Ensure you have the required files before submitting."))
         raise Error(msg)
+
 
 def _lfs_add(files, git):
     """
@@ -611,7 +624,8 @@ def _authenticate_https(org):
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline("")
-            i = child.expect(["Username for '.+'", "Password for '.+'", "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
+            i = child.expect(["Username for '.+'", "Password for '.+'",
+                              "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
             if i == 2:
                 username, password = child.match.groups()
             else:
@@ -701,6 +715,7 @@ def _prompt_password(prompt="Password: "):
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     return bytes(password).decode()
+
 
 # TODO remove
 if __name__ == "__main__":
