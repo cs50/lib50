@@ -12,7 +12,7 @@ import termcolor
 import subprocess
 
 import push50
-
+"""
 class TestGit(unittest.TestCase):
     def setUp(self):
         self.info_output = []
@@ -203,7 +203,7 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             with self.assertRaises(push50.InvalidSlugError):
                 push50.connect("cs50/problems2/foo/no_config", "check50")
-
+"""
 class TestFiles(unittest.TestCase):
     def setUp(self):
         self.working_directory = tempfile.TemporaryDirectory()
@@ -398,6 +398,8 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         with open("foo/bar.py", "w") as f:
             pass
+        with open("qux.py", "w") as f:
+            pass
 
         config = {
             "exclude" : ["*.py"]
@@ -405,7 +407,7 @@ class TestFiles(unittest.TestCase):
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), set())
-        self.assertEqual(set(excluded), {"foo/bar.py"})
+        self.assertEqual(set(excluded), {"qux.py", "foo/bar.py"})
 
         config = {
             "exclude" : ["./*.py"]
@@ -413,7 +415,7 @@ class TestFiles(unittest.TestCase):
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
-        self.assertEqual(set(excluded), set())
+        self.assertEqual(set(excluded), {"qux.py"})
 
     def test_implicit_recursive_with_slash(self):
         config = {
@@ -430,7 +432,6 @@ class TestFiles(unittest.TestCase):
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar/baz.py"})
         self.assertEqual(set(excluded), {"foo/qux.py"})
-
 
     def test_explicit_recursive(self):
         config = {
