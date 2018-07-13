@@ -25,7 +25,8 @@ import tty
 import attr
 import pexpect
 import requests
-import termcolor import yaml
+import termcolor
+import yaml
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -66,7 +67,7 @@ def local(slug, tool, offline=False):
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
-        git = Git("-C {local_path}")
+        git = Git(f"-C {local_path}")
         # Switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -84,7 +85,7 @@ def local(slug, tool, offline=False):
 
     # Get config
     try:
-        with open(problem_path / ".cs50.yaml", "r") as f:
+        with open(problem_path / ".cs50.yaml") as f:
             config = yaml.safe_load(f.read())
             if tool not in config or not config[tool]:
                 raise InvalidSlugError(
