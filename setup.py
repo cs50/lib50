@@ -1,11 +1,6 @@
 from setuptools import setup
 from setuptools.command.install import install
 
-import glob
-import os
-import subprocess
-from pathlib import Path
-
 
 try:
     from babel.messages import frontend as babel
