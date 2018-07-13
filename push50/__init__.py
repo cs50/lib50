@@ -25,8 +25,7 @@ import tty
 import attr
 import pexpect
 import requests
-import termcolor
-import yaml
+import termcolor import yaml
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -36,7 +35,7 @@ LOCAL_PATH = "~/.local/share/push50"
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
 
 # Internationalization
-gettext.install("push50", pkg_resources.resource_filename("push50", "locale"))
+_ = gettext.translation("push50", pkg_resources.resource_filename("push50", "locale"), fallback=True).gettext
 
 
 def push(org, slug, tool, prompt=lambda included, excluded: True):
@@ -733,13 +732,3 @@ def _prompt_password(prompt="Password: "):
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     return bytes(password).decode()
-
-
-# TODO remove
-if __name__ == "__main__":
-    ProgressBar.DISABLED = True
-    push("submit50", "cs50/problems/2018/x/project", "submit50")
-
-    #LOCAL_PATH = "./test"
-    #print(local("cs50/problems2/master/hello", "check50"))
-    pass
