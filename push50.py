@@ -104,47 +104,36 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
     Finally any entries in the always_exclude optional arg are excluded
     Returns included_files, excluded_files
     """
-    def find(pattern, skip_dirs=False):
-        if "/" not in pattern and pattern.startswith("*"):
-            files = glob.glob(f"**/{pattern}", recursive=True)
-        else:
-            files = glob.glob(pattern, recursive=True)
-
-        all_files = set()
-        for file in files:
-            if os.path.isdir(file) and not skip_dirs:
-                all_files.update(set(f for f in find(f"{file}/**/*", skip_dirs=True) if not os.path.isdir(f)))
-            else:
-                all_files.add(file)
-        return all_files
-
-    included = find("*")
+    # Include everything by default
+    included = _glob("*")
     excluded = set()
 
     if "exclude" not in config:
         return list(included), list(excluded)
 
-    exclusion_rules = []
-
+    # Per line in exclude
     for line in config["exclude"]:
+        # If line starts with !, include every file that matches
         if line.startswith("!"):
-            exclusion_rules.append(line[1:])
-            new_included = find(line[1:])
+            new_included = _glob(line[1:])
             excluded -= new_included
             included.update(new_included)
+        # Otherwise, exclude every file that matches
         else:
-            new_excluded = find(line)
+            new_excluded = _glob(line)
             included -= new_excluded
             excluded.update(new_excluded)
 
+    # Include all files from required
     if "required" in config:
-        for line in config["required"]:
-            new_included = find(line)
-            excluded -= new_included
-            included.update(new_included)
+        for file in config["required"]:
+            file = str(Path(file))
+            excluded -= {file}
+            included.add(file)
 
+    # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
-        new_excluded = find(line)
+        new_excluded = _glob(line)
         included -= new_excluded
 
     return list(included), list(excluded)
@@ -509,6 +498,25 @@ def _run(command, quiet=False, timeout=None):
 
     return command_output
 
+
+def _glob(pattern, skip_dirs=False):
+    """Glob pattern, expand directories, return all files that matched."""
+    # Implicit recursive iff no / in pattern and starts with *
+    if "/" not in pattern and pattern.startswith("*"):
+        files = glob.glob(f"**/{pattern}", recursive=True)
+    else:
+        files = glob.glob(pattern, recursive=True)
+
+    # Expand dirs
+    all_files = set()
+    for file in files:
+        if os.path.isdir(file) and not skip_dirs:
+            all_files.update(set(f for f in _glob(f"{file}/**/*", skip_dirs=True) if not os.path.isdir(f)))
+        else:
+            all_files.add(file)
+
+    # Normalize all files
+    return set([str(Path(f)) for f in all_files])
 
 def _get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
