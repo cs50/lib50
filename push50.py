@@ -98,11 +98,15 @@ def local(slug, tool, offline=False):
 
 def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
-    From config (exclude + required keys) decide which files are included and excluded
-    First exclude is interpeted as .gitignore
-    Then all entries from required are included
-    Finally any entries in the always_exclude optional arg are excluded
-    Returns included_files, excluded_files
+    Parses config, returns which files should be included and excluded from cwd.
+    First all files are included.
+    Secondly every line from config["exclude"] is globbed.
+        All files that match a line starting with ! are included
+        All files that match another line are excluded
+        Last line wins
+    Thirdly all files from config["required"] are included.
+    Finally, all entries in always_exclude are globbed.
+        Matched files are silently excluded (do not appear in returned lists)
     """
     # Include everything by default
     included = _glob("*")
