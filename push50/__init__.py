@@ -104,14 +104,13 @@ def working_area(files, name=""):
     Optionally names the working area name
     Returns path to the working area
     """
-    # Check whether `cp` support --reflink (Copy on Write)
     with tempfile.TemporaryDirectory() as dir:
         dir = Path(Path(dir) / name)
-        os.mkdir(dir)
+        dir.mkdir(exist_ok=True)
 
         for f in files:
             dest = (dir / f).absolute()
-            os.makedirs(dest.parent, exist_ok=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(f, dest)
         yield dir
 
