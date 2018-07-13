@@ -1,6 +1,5 @@
 from setuptools import setup
 from setuptools.command.install import install
-from babel.messages import frontend as babel
 
 import glob
 import os
@@ -29,7 +28,6 @@ else:
         "update_catalog": babel.update_catalog,
         "install": InstallWithCompile
     }
-
 
 
 setup(
