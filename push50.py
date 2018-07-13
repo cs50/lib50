@@ -104,68 +104,50 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
     Finally any entries in the always_exclude optional arg are excluded
     Returns included_files, excluded_files
     """
-    class Files:
-        def __init__(self, files=[]):
-            self._files = set()
-            for f in files:
-                if os.path.isdir(f):
-                    self._files.update(self._expand_dir(f))
-                else:
-                    self._files.add(f)
-
-        def _expand_dir(self, dir):
-            return set(f for f in find(f"{dir}/**/*") if not os.path.isdir(f))
-
-        def __isub__(self, other):
-            for other_file in other._files:
-                if other_file in self._files:
-                    self._files.remove(other_file)
-            return self
-
-        def __iadd__(self, other):
-            for other_file in other._files:
-                self._files.add(other_file)
-            return self
-
-        def aslist(self):
-            return list(self._files)
-
-    def find(pattern):
+    def find(pattern, skip_dirs=False):
         if "/" not in pattern and pattern.startswith("*"):
-            return glob.glob(f"**/{pattern}", recursive=True)
+            files = glob.glob(f"**/{pattern}", recursive=True)
         else:
-            return glob.glob(pattern, recursive=True)
+            files = glob.glob(pattern, recursive=True)
 
-    included = Files(glob.glob("*"))
-    excluded = Files()
+        all_files = set()
+        for file in files:
+            if os.path.isdir(file) and not skip_dirs:
+                all_files.update(set(f for f in find(f"{file}/**/*", skip_dirs=True) if not os.path.isdir(f)))
+            else:
+                all_files.add(file)
+        return all_files
+
+    included = find("*")
+    excluded = set()
 
     if "exclude" not in config:
-        return included.aslist(), excluded.aslist()
+        return list(included), list(excluded)
 
     exclusion_rules = []
 
     for line in config["exclude"]:
         if line.startswith("!"):
             exclusion_rules.append(line[1:])
-            new_included = Files(find(line[1:]))
+            new_included = find(line[1:])
             excluded -= new_included
-            included += new_included
+            included.update(new_included)
         else:
-            new_excluded = Files(find(line))
+            new_excluded = find(line)
             included -= new_excluded
-            excluded += new_excluded
+            excluded.update(new_excluded)
 
     if "required" in config:
         for line in config["required"]:
-            new_included = Files(find(line))
+            new_included = find(line)
             excluded -= new_included
-            included += new_included
+            included.update(new_included)
 
     for line in always_exclude:
-        new_excluded = Files(find(line))
+        new_excluded = find(line)
         included -= new_excluded
 
-    return included.aslist(), excluded.aslist()
+    return list(included), list(excluded)
 
 def connect(slug, tool):
     """
