@@ -12,7 +12,7 @@ import termcolor
 import subprocess
 
 import push50
-"""
+
 class TestGit(unittest.TestCase):
     def setUp(self):
         self.info_output = []
@@ -59,17 +59,15 @@ class TestGit(unittest.TestCase):
 
     def test_special_args(self):
         try:
-            push50.Git.work_tree = "bar"
-            push50.Git.git_dir = "baz"
-            push50.Git.cache = "qux"
+            push50.Git.working_area = "bar"
+            push50.Git.cache = "baz"
 
-            git = push50.Git(push50.Git.work_tree, push50.Git.git_dir, push50.Git.cache)
-            self.assertEqual(git("foo"), "git bar baz qux foo")
+            git = push50.Git(push50.Git.working_area, push50.Git.cache)
+            self.assertEqual(git("foo"), "git bar baz foo")
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
-            self.assertTrue(self.debug_output, ["git bar baz qux foo"])
+            self.assertTrue(self.debug_output, ["git bar baz foo"])
         finally:
-            push50.Git.work_tree = ""
-            push50.Git.git_dir = ""
+            push50.Git.working_area = ""
             push50.Git.cache = ""
 
 class TestSlug(unittest.TestCase):
@@ -203,7 +201,7 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             with self.assertRaises(push50.InvalidSlugError):
                 push50.connect("cs50/problems2/foo/no_config", "check50")
-"""
+
 class TestFiles(unittest.TestCase):
     def setUp(self):
         self.working_directory = tempfile.TemporaryDirectory()

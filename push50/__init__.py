@@ -96,6 +96,28 @@ def local(slug, tool, offline=False):
     return problem_path
 
 
+@contextlib.contextmanager
+def working_area(files):
+    """
+    Copy all files to a temporary directory (the working area)
+    Returns path to the working area
+    """
+    # Check whether `cp` support --reflink (Copy on Write)
+    reflink_enabled = "GNU coreutils" in _run(f"strings {shutil.which('cp')}", quiet=True)
+    with tempfile.TemporaryDirectory() as dir:
+        dir = Path(dir)
+        for f in files:
+            # Use --reflink to copy if possible
+            dest = (dir / f).absolute()
+            cp_cmd = f"cp --reflink=auto {f} {dest}" if reflink_enabled else f"cp {f} {dest}"
+            create_dir = f"mkdir -p {dest.parent}"
+            logger.debug(create_dir)
+            _run(create_dir)
+            logger.debug(cp_cmd)
+            _run(cp_cmd)
+        yield dir
+
+
 def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
     Parses config, returns which files should be included and excluded from cwd.
@@ -198,28 +220,36 @@ def prepare(org, branch, user, config):
     Stage files via lfs if necessary
     Check that atleast one file is staged
     """
-    with ProgressBar(_("Preparing")) as progress_bar, tempfile.TemporaryDirectory() as git_dir:
-        Git.work_tree = f"--work-tree={os.getcwd()}"
-        Git.git_dir = f"--git-dir={git_dir}"
-        git = Git(Git.work_tree, Git.git_dir)
+    with ProgressBar(_("Preparing")) as progress_bar:
 
-        # Clone just .git folder
-        try:
-            with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} {git_dir}")) as child:
-                if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
-                    child.sendline(user.password)
-        except Error:
-            if user.password:
-                e = Error(_("Looks like {} isn't enabled for your account yet. "
-                            "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
-            else:
-                e = Error(_("Looks {0} isn't yet enabled for your account. "
-                            "Log into https://cs50.me/ in a browser, "
-                            "click \"Authorize application\" if prompted, and re-run {0} here.".format(org)))
-            raise e
+        # Decide on files to include, exclude
+        included, excluded = files(config)
 
-        # Shadow any user specified .gitattributes (necessary evil for using git lfs for oversized files)
-        with _shadow(".gitattributes") as hidden_gitattributes:
+        # Check that at least 1 file is staged
+        if not included:
+            raise Error(_("No files in this directory are expected for submission."))
+
+        with working_area(included) as area:
+            Git.working_area = f"-C {area}"
+            git = Git(Git.working_area)
+            # Clone just .git folder
+            try:
+                with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} .git")) as child:
+                    if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
+                        child.sendline(user.password)
+            except Error:
+                if user.password:
+                    e = Error(_("Looks like {} isn't enabled for your account yet. "
+                                "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
+                else:
+                    e = Error(_("Looks {0} isn't yet enabled for your account. "
+                                "Log into https://cs50.me/ in a browser, "
+                                "click \"Authorize application\" if prompted, and re-run {0} here.".format(org)))
+                raise e
+
+            _run(git("config --bool core.bare false"))
+            _run(git(f"config --path core.worktree {area}"))
+
             try:
                 _run(git("checkout --force {} .gitattributes".format(branch)))
             except Error:
@@ -232,24 +262,13 @@ def prepare(org, branch, user, config):
             # Switch to branch without checkout
             _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-            # Decide on files to include, exclude
-            included, excluded = files(config)
-
             # Git add all included files
             for f in included:
-                _run(git(f"add --force {f}"))
+                _run(git(f"add {f}"))
 
-            # Remove gitattributes from files
-            if Path(".gitattributes").exists() and ".gitattributes" in files:
-                files.remove(".gitattributes")
-
-            # Remove the shadowed gitattributes from excluded_files
-            if hidden_gitattributes.name in excluded:
-                excluded.remove(hidden_gitattributes.name)
-
-            # Check that at least 1 file is staged
-            if not included:
-                raise Error(_("No files in this directory are expected for submission."))
+            # Remove gitattributes from included
+            if Path(".gitattributes").exists() and ".gitattributes" in included:
+                included.remove(".gitattributes")
 
             # Add any oversized files through git-lfs
             _lfs_add(included, git)
@@ -258,7 +277,7 @@ def prepare(org, branch, user, config):
             yield included, excluded
 
 
-def upload(branch, user):
+def upload(branch, user, tool):
     """
     Commit + push to branch
     Returns username, commit hash
@@ -270,8 +289,8 @@ def upload(branch, user):
         commit_message = f"{commit_header}\n\n{commit_body}"
 
         # Commit + push
-        git = Git(Git.work_tree, Git.git_dir)
-        _run(git(f"commit -m {commit_message} --allow-empty"))
+        git = Git(Git.working_area)
+        _run(git(f"commit -m {shlex.quote(commit_message)} --allow-empty"))
         with _spawn(git.set(Git.cache)(f"push origin {branch}")) as child:
             if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
                 child.sendline(user.password)
@@ -329,8 +348,7 @@ class User:
 
 class Git:
     cache = ""
-    git_dir = ""
-    work_tree = ""
+    working_area = ""
 
     def __init__(self, *args):
         self._args = args
@@ -344,8 +362,8 @@ class Git:
 
         # Format to show in git info
         logged_command = git_command
-        for opt in [Git.cache, Git.git_dir, Git.work_tree]:
-            logged_command = logged_command.replace(opt, "")
+        for opt in [Git.cache, Git.working_area]:
+            logged_command = logged_command.replace(str(opt), "")
         logged_command = re.sub(' +', ' ', logged_command)
 
         # Log pretty command in info
