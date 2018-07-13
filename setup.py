@@ -38,6 +38,7 @@ setup(
     message_extractors = {
         'push50': [('**.py', 'python', None),],
     },
+    license="GPLv3",
     description="This is push50, CS50's internal library for using GitHub as data storage.",
     install_requires=["attrs", "babel", "keyring", "pexpect", "pyyaml", "requests", "termcolor"],
     keywords=["push50"],
