@@ -28,6 +28,7 @@ import requests
 import termcolor
 import yaml
 
+#logging.basicConfig(level="DEBUG")
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -97,24 +98,21 @@ def local(slug, tool, offline=False):
 
 
 @contextlib.contextmanager
-def working_area(files):
+def working_area(files, name=""):
     """
     Copy all files to a temporary directory (the working area)
+    Optionally names the working area name
     Returns path to the working area
     """
     # Check whether `cp` support --reflink (Copy on Write)
-    reflink_enabled = "GNU coreutils" in _run(f"strings {shutil.which('cp')}", quiet=True)
     with tempfile.TemporaryDirectory() as dir:
-        dir = Path(dir)
+        dir = Path(Path(dir) / name)
+        os.mkdir(dir)
+
         for f in files:
-            # Use --reflink to copy if possible
             dest = (dir / f).absolute()
-            cp_cmd = f"cp --reflink=auto {f} {dest}" if reflink_enabled else f"cp {f} {dest}"
-            create_dir = f"mkdir -p {dest.parent}"
-            logger.debug(create_dir)
-            _run(create_dir)
-            logger.debug(cp_cmd)
-            _run(cp_cmd)
+            os.makedirs(dest.parent, exist_ok=True)
+            shutil.copy(f, dest)
         yield dir
 
 
@@ -150,12 +148,20 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
             included -= new_excluded
             excluded.update(new_excluded)
 
+    missing_files = []
+
     # Include all files from required
     if "required" in config:
         for file in config["required"]:
             file = str(Path(file))
+            if not os.path.exists(file):
+                missing_files.append(file)
             excluded -= {file}
             included.add(file)
+
+    # If any required files missing, raise Error
+    if missing_files:
+        raise MissingFilesError(missing_files)
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
