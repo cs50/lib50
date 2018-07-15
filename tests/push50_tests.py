@@ -167,22 +167,27 @@ class TestProgressBar(unittest.TestCase):
         self.assertEqual("foo...\n", f.getvalue())
 
 class TestConnect(unittest.TestCase):
+    def setUp(self):
+        self.working_directory = tempfile.TemporaryDirectory()
+        self._wd = os.getcwd()
+        os.chdir(self.working_directory.name)
+
+    def tearDown(self):
+        self.working_directory.cleanup()
+        os.chdir(self._wd)
+
     def test_connect(self):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            config = push50.connect("cs50/problems2/foo/bar", "check50")
-            self.assertEqual(config["dependencies"], ["pyyaml"])
-            self.assertEqual(config["exclude"], ["*", "!*.py"])
-            self.assertEqual(config["required"], ["hello.py"])
+            included, excluded = push50.connect("cs50/problems2/foo/bar", "check50")
+            self.assertEqual(excluded, set())
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            config = push50.connect("cs50/problems2/foo/bar", "submit50")
-            self.assertTrue("dependencies" not in config)
-            self.assertEqual(config["exclude"], ["*", "!*.py"])
-            self.assertEqual(config["required"], ["hello.py"])
+            include, excluded = push50.connect("cs50/problems2/foo/bar", "submit50")
+            self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
     def test_missing_problem(self):

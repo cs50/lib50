@@ -47,10 +47,10 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
     """
     check_dependencies()
 
-    config = connect(slug, tool)
+    included, excluded = connect(slug, tool)
 
     with authenticate(org) as user:
-        with prepare(org, slug, user, config) as (included, excluded):
+        with prepare(tool, slug, user, included):
             if prompt(included, excluded):
                 return upload(slug, user, tool)
             else:
@@ -201,10 +201,13 @@ def connect(slug, tool):
         if not isinstance(config, dict):
             config = {}
 
-        # Check that all required files are present
-        _check_required(config)
+        included, excluded = files(config)
+        # Check that at least 1 file is staged
+        if not included:
+            raise Error(_("No files in this directory are expected for submission."))
 
-        return config
+        return included, excluded
+
 
 
 @contextlib.contextmanager
@@ -225,7 +228,7 @@ def authenticate(org):
 
 
 @contextlib.contextmanager
-def prepare(org, branch, user, config):
+def prepare(tool, branch, user, included):
     """
     Prepare git for pushing
     Check that there are no permission errors
@@ -236,30 +239,15 @@ def prepare(org, branch, user, config):
     """
     with ProgressBar(_("Preparing")) as progress_bar:
 
-        # Decide on files to include, exclude
-        included, excluded = files(config)
-
-        # Check that at least 1 file is staged
-        if not included:
-            raise Error(_("No files in this directory are expected for submission."))
-
         with working_area(included) as area:
             Git.working_area = f"-C {area}"
             git = Git(Git.working_area)
             # Clone just .git folder
             try:
-                with _spawn(git.set(Git.cache)(f"clone --bare {user.repo} .git")) as child:
-                    if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
-                        child.sendline(user.password)
+                _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
             except Error:
-                if user.password:
-                    e = Error(_("Looks like {} isn't enabled for your account yet. "
-                                "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(org)))
-                else:
-                    e = Error(_("Looks {0} isn't yet enabled for your account. "
-                                "Log into https://cs50.me/ in a browser, "
-                                "click \"Authorize application\" if prompted, and re-run {0} here.".format(org)))
-                raise e
+                raise Error(_("Looks like {} isn't enabled for your account yet. "
+                              "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(tool)))
 
             _run(git("config --bool core.bare false"))
             _run(git(f"config --path core.worktree {area}"))
@@ -288,7 +276,7 @@ def prepare(org, branch, user, config):
             _lfs_add(included, git)
 
             progress_bar.stop()
-            yield included, excluded
+            yield
 
 
 def upload(branch, user, tool):
@@ -305,10 +293,7 @@ def upload(branch, user, tool):
         # Commit + push
         git = Git(Git.working_area)
         _run(git(f"commit -m {shlex.quote(commit_message)} --allow-empty"))
-        with _spawn(git.set(Git.cache)(f"push origin {branch}")) as child:
-            if user.password and child.expect(["Password for '.*': ", pexpect.EOF]) == 0:
-                child.sendline(user.password)
-
+        _run(git.set(Git.cache)(f"push origin {branch}"))
         commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
@@ -564,18 +549,6 @@ def _get_content(org, repo, branch, filepath):
         else:
             raise Error(_("Could not connect to GitHub."))
     return r.content
-
-
-def _check_required(config):
-    """Check that all required files are present."""
-
-    if "required" not in config:
-        return
-
-    missing = [f for f in config["required"] if not os.path.exists(f)]
-
-    if missing:
-        raise MissingFilesError(missing)
 
 
 def _lfs_add(files, git):
