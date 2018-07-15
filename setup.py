@@ -1,30 +1,4 @@
 from setuptools import setup
-from setuptools.command.build_py import build_py
-
-import os
-import glob
-
-try:
-    from babel.messages import frontend as babel
-except ImportError:
-    cmdclass = {}
-else:
-    # https://stackoverflow.com/questions/40051076/babel-compile-translation-files-when-calling-setup-py-install
-    class InstallWithCompile(build_py):
-        def run(self):
-            compiler = babel.compile_catalog(self.distribution)
-            option_dict = self.distribution.get_option_dict("compile_catalog")
-            compiler.domain = [option_dict["domain"][1]]
-            compiler.directory = option_dict["directory"][1]
-            compiler.run()
-            # os.system("tree")
-            # self.mo_files = glob.glob("**.mo", recursive=True)
-            # print(self.mo_files)
-            super().run()
-    cmdclass = {
-        "build_py": InstallWithCompile
-    }
-
 
 setup(
     author="CS50",
