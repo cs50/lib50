@@ -15,7 +15,7 @@ setup(
     },
     license="GPLv3",
     description="This is push50, CS50's internal library for using GitHub as data storage.",
-    install_requires=["attrs", "babel", "pexpect", "pyyaml", "requests", "termcolor"],
+    install_requires=["attrs", "pexpect", "pyyaml", "requests", "termcolor"],
     keywords=["push50"],
     name="push50",
     python_requires=">= 3.6",
