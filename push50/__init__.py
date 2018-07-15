@@ -73,7 +73,7 @@ def local(slug, tool, offline=False):
         _run(git(f"checkout {slug.branch}"))
 
         if not offline:
-            # Pull new commits
+            # Fetch new commits
             _run(git("fetch"))
     else:
         # Clone repo to local_path
@@ -164,9 +164,9 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
-        new_excluded = _glob(line)
-        included -= new_excluded
+        included -= _glob(line)
 
+    # Exclude any files that are not valid utf8
     invalid = set()
     for file in included:
         try:
@@ -177,6 +177,7 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
     included -= invalid
 
     return included, excluded
+
 
 def connect(slug, tool):
     """
@@ -198,16 +199,17 @@ def connect(slug, tool):
         if not config:
             raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
 
+        # If config of tool is just a truthy value, config should be empty
         if not isinstance(config, dict):
             config = {}
 
         included, excluded = files(config)
+
         # Check that at least 1 file is staged
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
         return included, excluded
-
 
 
 @contextlib.contextmanager
@@ -237,46 +239,44 @@ def prepare(tool, branch, user, included):
     Stage files via lfs if necessary
     Check that atleast one file is staged
     """
-    with ProgressBar(_("Preparing")) as progress_bar:
+    with ProgressBar(_("Preparing")) as progress_bar, working_area(included) as area:
+        Git.working_area = f"-C {area}"
+        git = Git(Git.working_area)
+        # Clone just .git folder
+        try:
+            _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
+        except Error:
+            raise Error(_("Looks like {} isn't enabled for your account yet. "
+                          "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(tool)))
 
-        with working_area(included) as area:
-            Git.working_area = f"-C {area}"
-            git = Git(Git.working_area)
-            # Clone just .git folder
-            try:
-                _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
-            except Error:
-                raise Error(_("Looks like {} isn't enabled for your account yet. "
-                              "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(tool)))
+        _run(git("config --bool core.bare false"))
+        _run(git(f"config --path core.worktree {area}"))
 
-            _run(git("config --bool core.bare false"))
-            _run(git(f"config --path core.worktree {area}"))
+        try:
+            _run(git("checkout --force {} .gitattributes".format(branch)))
+        except Error:
+            pass
 
-            try:
-                _run(git("checkout --force {} .gitattributes".format(branch)))
-            except Error:
-                pass
+        # Set user name/email in repo config
+        _run(git(f"config user.email {shlex.quote(user.email)}"))
+        _run(git(f"config user.name {shlex.quote(user.name)}"))
 
-            # Set user name/email in repo config
-            _run(git(f"config user.email {shlex.quote(user.email)}"))
-            _run(git(f"config user.name {shlex.quote(user.name)}"))
+        # Switch to branch without checkout
+        _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
 
-            # Switch to branch without checkout
-            _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
+        # Git add all included files
+        for f in included:
+            _run(git(f"add {f}"))
 
-            # Git add all included files
-            for f in included:
-                _run(git(f"add {f}"))
+        # Remove gitattributes from included
+        if Path(".gitattributes").exists() and ".gitattributes" in included:
+            included.remove(".gitattributes")
 
-            # Remove gitattributes from included
-            if Path(".gitattributes").exists() and ".gitattributes" in included:
-                included.remove(".gitattributes")
+        # Add any oversized files through git-lfs
+        _lfs_add(included, git)
 
-            # Add any oversized files through git-lfs
-            _lfs_add(included, git)
-
-            progress_bar.stop()
-            yield
+        progress_bar.stop()
+        yield
 
 
 def upload(branch, user, tool):
@@ -537,7 +537,8 @@ def _glob(pattern, skip_dirs=False):
             all_files.add(file)
 
     # Normalize all files
-    return set(str(Path(f)) for f in all_files)
+    return {str(Path(f)) for f in all_files}
+
 
 def _get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
@@ -593,31 +594,6 @@ def _lfs_add(files, git):
             _run(git("lfs track {}".format(shlex.quote(large))))
             _run(git("add {}".format(shlex.quote(large))))
         _run(git("add --force .gitattributes"))
-
-
-@contextlib.contextmanager
-def _shadow(filepath):
-    """
-    Temporarily shadow filepath, allowing you to safely create a file at filepath
-    When entering:
-    - renames file at filepath to unique hidden name
-    When exiting:
-    - removes file
-    - restores file (if it existed in the first place)
-    Yields the hidden_path (only exists if filepath exists)
-    """
-    filepath = Path(filepath).absolute()
-    hidden_path = filepath.parent / f".shadowed_{filepath.name}_{round(time.time())}"
-    is_shadowing = filepath.exists()
-    if is_shadowing:
-        os.rename(filepath, hidden_path)
-
-    yield hidden_path
-
-    if filepath.exists():
-        os.remove(filepath)
-    if is_shadowing:
-        os.rename(hidden_path, filepath)
 
 
 def _authenticate_ssh(org):
