@@ -169,6 +169,7 @@ class TestProgressBar(unittest.TestCase):
 class TestConnect(unittest.TestCase):
     def test_connect(self):
         f = io.StringIO()
+        open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
             config = push50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(config["dependencies"], ["pyyaml"])
@@ -217,10 +218,8 @@ class TestFiles(unittest.TestCase):
             "exclude" : ["foo.py"]
         }
 
-        with open("foo.py", "w") as f:
-            pass
-        with open("bar.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
+        open("bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"bar.py"})
@@ -232,11 +231,10 @@ class TestFiles(unittest.TestCase):
         }
 
         included, excluded = push50.files(config)
-        self.assertEqual(set(included), set())
-        self.assertEqual(set(excluded), set())
+        self.assertEqual(included, set())
+        self.assertEqual(excluded, set())
 
-        with open("foo.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), set())
@@ -247,10 +245,8 @@ class TestFiles(unittest.TestCase):
             "exclude" : ["*", "!foo.py"]
         }
 
-        with open("foo.py", "w") as f:
-            pass
-        with open("bar.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
+        open("bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py"})
@@ -259,10 +255,8 @@ class TestFiles(unittest.TestCase):
     def test_include_all(self):
         config = {}
 
-        with open("foo.py", "w") as f:
-            pass
-        with open("bar.c", "w") as f:
-            pass
+        open("foo.py", "w").close()
+        open("bar.c", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py", "bar.c"})
@@ -281,15 +275,13 @@ class TestFiles(unittest.TestCase):
             "required" : ["foo.py"]
         }
 
-        with open("foo.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
-        with open("bar.c", "w") as f:
-            pass
+        open("bar.c", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py", "bar.c"})
@@ -301,15 +293,13 @@ class TestFiles(unittest.TestCase):
             "required" : ["foo.py"]
         }
 
-        with open("foo.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
-        with open("bar.c", "w") as f:
-            pass
+        open("bar.c", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo.py"})
@@ -320,8 +310,7 @@ class TestFiles(unittest.TestCase):
             "exclude" : ["!foo.py"]
         }
 
-        with open("foo.py", "w") as f:
-            pass
+        open("foo.py", "w").close()
 
         included, excluded = push50.files(config, always_exclude=["foo.py"])
         self.assertEqual(set(included), set())
@@ -333,8 +322,7 @@ class TestFiles(unittest.TestCase):
         }
 
         os.mkdir("foo")
-        with open("foo/bar", "w") as f:
-            pass
+        open("foo/bar", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar"})
@@ -346,8 +334,7 @@ class TestFiles(unittest.TestCase):
         }
 
         os.mkdir("foo")
-        with open("foo/bar.py", "w") as f:
-            pass
+        open("foo/bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), set())
@@ -359,8 +346,7 @@ class TestFiles(unittest.TestCase):
         }
 
         os.mkdir("foo")
-        with open("foo/bar.py", "w") as f:
-            pass
+        open("foo/bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
@@ -372,8 +358,7 @@ class TestFiles(unittest.TestCase):
         }
 
         os.mkdir("foo")
-        with open("foo/bar.py", "w") as f:
-            pass
+        open("foo/bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
@@ -385,8 +370,7 @@ class TestFiles(unittest.TestCase):
         }
 
         os.mkdir("foo")
-        with open("foo/bar.py", "w") as f:
-            pass
+        open("foo/bar.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
@@ -394,10 +378,8 @@ class TestFiles(unittest.TestCase):
 
     def test_implicit_recursive(self):
         os.mkdir("foo")
-        with open("foo/bar.py", "w") as f:
-            pass
-        with open("qux.py", "w") as f:
-            pass
+        open("foo/bar.py", "w").close()
+        open("qux.py", "w").close()
 
         config = {
             "exclude" : ["*.py"]
@@ -422,10 +404,8 @@ class TestFiles(unittest.TestCase):
 
         os.mkdir("foo")
         os.mkdir("foo/bar")
-        with open("foo/bar/baz.py", "w") as f:
-            pass
-        with open("foo/qux.py", "w") as f:
-            pass
+        open("foo/bar/baz.py", "w").close()
+        open("foo/qux.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"foo/bar/baz.py"})
@@ -439,15 +419,27 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         os.mkdir("foo/bar")
         os.mkdir("foo/bar/baz")
-        with open("foo/bar/baz/qux.py", "w") as f:
-            pass
-
-        with open("hello.py", "w") as f:
-            pass
+        open("foo/bar/baz/qux.py", "w").close()
+        open("hello.py", "w").close()
 
         included, excluded = push50.files(config)
         self.assertEqual(set(included), {"hello.py"})
         self.assertEqual(set(excluded), {"foo/bar/baz/qux.py"})
+
+    def test_requires_no_exclude(self):
+        config = {
+            "required": ["does_not_exist.py"]
+        }
+
+        with self.assertRaises(push50.MissingFilesError):
+            push50.files(config)
+
+    def test_invalid_utf8_filename(self):
+        open(b"\xc3\x28", "w").close()
+        included, excluded = push50.files({})
+        self.assertEqual(included, set())
+        self.assertEqual(excluded, {"?("})
+
 
 if __name__ == '__main__':
     unittest.main()

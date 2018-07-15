@@ -131,43 +131,52 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
     included = _glob("*")
     excluded = set()
 
-    if "exclude" not in config:
-        return list(included), list(excluded)
-
-    # Per line in exclude
-    for line in config["exclude"]:
-        # If line starts with !, include every file that matches
-        if line.startswith("!"):
-            new_included = _glob(line[1:])
-            excluded -= new_included
-            included.update(new_included)
-        # Otherwise, exclude every file that matches
-        else:
-            new_excluded = _glob(line)
-            included -= new_excluded
-            excluded.update(new_excluded)
-
-    missing_files = []
+    if "exclude" in config:
+        # Per line in exclude
+        for line in config["exclude"]:
+            # If line starts with !, include every file that matches
+            if line.startswith("!"):
+                new_included = _glob(line[1:])
+                excluded -= new_included
+                included.update(new_included)
+            # Otherwise, exclude every file that matches
+            else:
+                new_excluded = _glob(line)
+                included -= new_excluded
+                excluded.update(new_excluded)
 
     # Include all files from required
     if "required" in config:
+        missing_files = []
         for file in config["required"]:
-            file = str(Path(file))
-            if not os.path.exists(file):
+            if not Path(file).exists():
                 missing_files.append(file)
-            excluded -= {file}
-            included.add(file)
+            try:
+                excluded.remove(file)
+            except KeyError:
+                pass
+            else:
+                included.add(file)
 
-    # If any required files missing, raise Error
-    if missing_files:
-        raise MissingFilesError(missing_files)
+        # If any required files missing, raise Error
+        if missing_files:
+            raise MissingFilesError(missing_files)
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
         new_excluded = _glob(line)
         included -= new_excluded
 
-    return list(included), list(excluded)
+    invalid = set()
+    for file in included:
+        try:
+            file.encode("utf8")
+        except UnicodeEncodeError:
+            excluded.add(file.encode("utf8", "replace").decode())
+            invalid.add(file)
+    included -= invalid
+
+    return included, excluded
 
 def connect(slug, tool):
     """
@@ -543,7 +552,7 @@ def _glob(pattern, skip_dirs=False):
             all_files.add(file)
 
     # Normalize all files
-    return set([str(Path(f)) for f in all_files])
+    return set(str(Path(f)) for f in all_files)
 
 def _get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
