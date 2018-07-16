@@ -445,6 +445,39 @@ class TestFiles(unittest.TestCase):
         self.assertEqual(included, set())
         self.assertEqual(excluded, {"?("})
 
+class TestLocal(unittest.TestCase):
+    def setUp(self):
+        self.working_directory = tempfile.TemporaryDirectory()
+        self._wd = os.getcwd()
+        os.chdir(self.working_directory.name)
+
+    def tearDown(self):
+        self.working_directory.cleanup()
+        os.chdir(self._wd)
+
+    def test_local(self):
+        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+
+        self.assertTrue(local_dir.is_dir())
+        self.assertTrue((local_dir / "__init__.py").is_file())
+        self.assertTrue((local_dir / ".cs50.yaml").is_file())
+
+        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+
+        self.assertTrue(local_dir.is_dir())
+        self.assertTrue((local_dir / "__init__.py").is_file())
+        self.assertTrue((local_dir / ".cs50.yaml").is_file())
+
+        shutil.rmtree(local_dir)
+
+        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+
+        self.assertTrue(local_dir.is_dir())
+        self.assertTrue((local_dir / "__init__.py").is_file())
+        self.assertTrue((local_dir / ".cs50.yaml").is_file())
+
+        shutil.rmtree(local_dir)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -73,8 +73,11 @@ def local(slug, tool, offline=False):
         _run(git(f"checkout {slug.branch}"))
 
         if not offline:
-            # Fetch new commits
-            _run(git("fetch"))
+            # Stash any changes
+            _run(git("stash"))
+
+            # Pull new commits
+            _run(git("pull"))
     else:
         # Clone repo to local_path
         _run(Git()(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
