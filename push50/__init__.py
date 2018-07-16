@@ -338,7 +338,6 @@ class MissingFilesError(Error):
 @attr.s(slots=True)
 class User:
     name = attr.ib()
-    password = attr.ib()
     repo = attr.ib()
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
@@ -607,7 +606,6 @@ def _authenticate_ssh(org):
     if i == 0:
         username = child.match.groups()[0]
         return User(name=username,
-                    password=None,
                     repo=f"git@github.com:{org}/{username}")
 
 
@@ -663,7 +661,6 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   password=password,
                    repo=f"https://{username}@github.com/{org}/{username}")
     except:
         logout()
