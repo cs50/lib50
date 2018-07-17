@@ -8,7 +8,7 @@ script:
   - python setup.py compile_catalog
   - python -m tests
 before_deploy: |
-  version="v$(python -c \"print(__import__('pkg_resources').get_distribution('push50').version)\")
+  version="v$(python -c \"print(__import__('pkg_resources').get_distribution('push50').version)\")"
   if [ -z "$(git tag --list "$version")" ]; then \
       git config --local user.name "bot50"; \
       git config --local user.email "bot@cs50.harvard.edu"; \
