@@ -31,7 +31,7 @@ from . import _
 from .errors import *
 from . import config as push50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout"]
+__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
 
 #logging.basicConfig(level="DEBUG")
 logger = logging.getLogger(__name__)
