@@ -4,7 +4,6 @@ import copy
 import datetime
 import gettext
 import itertools
-import json
 import logging
 import os
 import glob
@@ -49,12 +48,11 @@ def push(org, slug, tool, prompt=lambda included, excluded: True):
 
     included, excluded = connect(slug, tool)
 
-    with authenticate(org) as user:
-        with prepare(tool, slug, user, included):
-            if prompt(included, excluded):
-                return upload(slug, user, tool)
-            else:
-                raise Error(_("No files were submitted."))
+    with authenticate(org) as user, prepare(tool, slug, user, included):
+        if prompt(included, excluded):
+            return upload(slug, user, tool)
+        else:
+            raise Error(_("No files were submitted."))
 
 
 def local(slug, tool, offline=False):
@@ -288,10 +286,8 @@ def upload(branch, user, tool):
     Returns username, commit hash
     """
     with ProgressBar(_("Uploading")):
-        # Decide on commit message
-        commit_header = _("automated commit by {}").format(tool)
-        commit_body = json.dumps({"LANGUAGE": os.environ.get("LANGUAGE")})
-        commit_message = f"{commit_header}\n\n{commit_body}"
+        language = os.environ.get("LANGUAGE")
+        commit_message = _("automated commit by {}{}").format(tool, f" [{language}]" if language else "")
 
         # Commit + push
         git = Git(Git.working_area)
