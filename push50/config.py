@@ -36,23 +36,25 @@ def load(content, tool, loader=ConfigLoader):
     try:
         config = yaml.load(content, Loader=loader)
     except yaml.YAMLError:
-        raise errors.InvalidConfigError("config is not valid yaml")
+        raise errors.InvalidConfigError(_("Config is not valid yaml."))
 
     try:
         config = config[tool]
-    except KeyError:
-        raise errors.InvalidConfigError("{} is not in config".format(tool))
+    except (TypeError, KeyError):
+        config = None
 
-    if "files" in config:
+    try:
         files = config["files"]
-
+    except (TypeError, KeyError):
+        pass
+    else:
         if not isinstance(files, list):
-            raise errors.InvalidConfigError("files: entry in config must be a list")
+            raise errors.InvalidConfigError(_("files: entry in config must be a list"))
 
         for file in files:
             if not isinstance(file, File):
                 raise errors.InvalidConfigError(
-                    "All entries in files: must be tagged with either !include, !exclude or !require")
+                    _("All entries in files: must be tagged with either !include, !exclude or !require"))
 
     _validate_config(config, tool)
 
