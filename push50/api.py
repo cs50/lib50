@@ -69,7 +69,7 @@ def local(slug, tool, offline=False):
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
     if local_path.exists():
-        git = Git(f"-C {local_path}")
+        git = Git(f"-C {shlex.quote(str(local_path))}")
         # Switch to branch
         _run(git(f"checkout {slug.branch}"))
 
@@ -403,7 +403,8 @@ class Slug:
     def _get_branches(self):
         """Get branches from org/repo."""
         if self.offline:
-            get_refs = f"git -C {Path(LOCAL_PATH) / self.org / self.repo} show-ref --heads"
+            local_path = Path(LOCAL_PATH).expanduser() / self.org / self.repo
+            get_refs = f"git -C {shlex.quote(str(local_path))} show-ref --heads"
         else:
             get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
         try:
@@ -480,16 +481,11 @@ def _spawn(command, quiet=False, timeout=None):
         child.close()
         raise
     else:
-        # Drain output from process while we wait for it to quit
-        while child.isalive():
-            try:
-                child.read_nonblocking(timeout=0)
-            except pexpect.TIMEOUT:
-                pass
-            except pexpect.EOF:
-                child.wait()
-                break
-        child.close()
+        try:
+            child.expect(pexpect.EOF, timeout=timeout)
+        except pexpect.TIMEOUT:
+            raise Error()
+        child.close(force=True)
         if child.signalstatus is None and child.exitstatus != 0:
             logger.debug("{} exited with {}".format(command, child.exitstatus))
             raise Error()
