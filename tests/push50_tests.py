@@ -386,6 +386,46 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
+class TestWorkingArea(unittest.TestCase):
+    def setUp(self):
+        self.working_directory = tempfile.TemporaryDirectory()
+        self._wd = os.getcwd()
+        os.chdir(self.working_directory.name)
+        with open("foo.py", "w") as f:
+            pass
 
+        with open("bar.c", "w") as f:
+            pass
+
+        with open("qux.java", "w") as f:
+            pass
+
+    def tearDown(self):
+        self.working_directory.cleanup()
+        os.chdir(self._wd)
+
+    def test_empty(self):
+        with push50.working_area([]) as working_area:
+            contents = os.listdir(working_area)
+
+        self.assertEqual(contents, [])
+
+    def test_one_file(self):
+        with push50.working_area(["foo.py"]) as working_area:
+            contents = os.listdir(working_area)
+
+        self.assertEqual(contents, ["foo.py"])
+
+    def test_multiple_files(self):
+        with push50.working_area(["foo.py", "bar.c"]) as working_area:
+            contents = os.listdir(working_area)
+
+        self.assertEqual(set(contents), {"foo.py", "bar.c"})
+
+    def test_include_missing_file(self):
+        with self.assertRaises(FileNotFoundError):
+            with push50.working_area(["i_do_not_exist"]) as working_area:
+                pass
+                
 if __name__ == '__main__':
     unittest.main()
