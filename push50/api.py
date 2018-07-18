@@ -481,10 +481,11 @@ def _spawn(command, quiet=False, timeout=None):
         child.close()
         raise
     else:
-        try:
-            child.expect(pexpect.EOF, timeout=timeout)
-        except pexpect.TIMEOUT:
-            raise Error()
+        if child.isalive():
+            try:
+                child.expect(pexpect.EOF, timeout=timeout)
+            except pexpect.TIMEOUT:
+                raise Error()
         child.close(force=True)
         if child.signalstatus is None and child.exitstatus != 0:
             logger.debug("{} exited with {}".format(command, child.exitstatus))
