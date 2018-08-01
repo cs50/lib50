@@ -20,7 +20,7 @@ setup(
     python_requires=">= 3.6",
     packages=["push50"],
     url="https://github.com/cs50/push50",
-    version="1.0.0",
+    version="1.0.1",
     package_data={'': ['locale/*/*/*.mo', 'locale/*/*/*.po']},
     include_package_data=True
 )
