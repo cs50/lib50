@@ -73,9 +73,10 @@ def local(slug, tool, offline=False):
         _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
 
     if not offline:
-        _run(git(f"fetch origin {slug.branch} --depth=1"))
+        _run(git(f"fetch origin {slug.branch}"))
 
     _run(git(f"checkout -B {slug.branch} origin/{slug.branch}"))
+    _run(git(f"reset --hard HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
