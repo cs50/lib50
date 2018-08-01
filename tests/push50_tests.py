@@ -426,6 +426,6 @@ class TestWorkingArea(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             with push50.working_area(["i_do_not_exist"]) as working_area:
                 pass
-                
+
 if __name__ == '__main__':
     unittest.main()

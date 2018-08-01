@@ -33,7 +33,6 @@ from . import config as push50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
 
-#logging.basicConfig(level="DEBUG")
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -68,20 +67,16 @@ def local(slug, tool, offline=False):
 
     local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
 
-    if local_path.exists():
-        git = Git(f"-C {shlex.quote(str(local_path))}")
-        # Switch to branch
-        _run(git(f"checkout {slug.branch}"))
+    git = Git(f"-C {shlex.quote(str(local_path))}")
+    if not local_path.exists():
+        _run(Git()(f"init {shlex.quote(str(local_path))}"))
+        _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
 
-        if not offline:
-            # Stash any changes
-            _run(git("stash"))
+    if not offline:
+        _run(git(f"fetch origin {slug.branch}"))
 
-            # Pull new commits
-            _run(git("pull"))
-    else:
-        # Clone repo to local_path
-        _run(Git()(f"clone -b {slug.branch} https://github.com/{slug.org}/{slug.repo} {local_path}"))
+    _run(git(f"checkout -B {slug.branch} origin/{slug.branch}"))
+    _run(git(f"reset --hard HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
