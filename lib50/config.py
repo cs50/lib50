@@ -21,9 +21,9 @@ class PatternType(enum.Enum):
 
 
 class FilePattern:
-    def __init__(self, loader, node):
-        self.type = PatternType(node.tag)
-        self.pattern = node.value
+    def __init__(self, pattern_type, pattern):
+        self.type = pattern_type
+        self.pattern = pattern
 
 
 class ConfigLoader(SafeLoader):
@@ -31,7 +31,7 @@ class ConfigLoader(SafeLoader):
 
 
 for member in PatternType.__members__.values():
-    ConfigLoader.add_constructor(member.value, FilePattern)
+    ConfigLoader.add_constructor(member.value, lambda loader, node : FilePattern(PatternType(node.tag), node.value))
 ConfigLoader.add_multi_constructor("", InvalidTag)
 
 

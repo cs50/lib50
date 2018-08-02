@@ -115,44 +115,55 @@ def working_area(files, name=""):
         yield dir
 
 
-def files(patterns, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
+@contextlib.contextmanager
+def cd(dest):
+    origin = os.getcwd()
+    try:
+        os.chdir(dest)
+        yield dest
+    finally:
+        os.chdir(origin)
+
+
+def files(patterns, root=".", always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
     Takes a list of lib50.config.FilePatterns returns which files should be included and excluded from cwd.
     """
-    # Include everything by default
-    included = _glob("*")
-    excluded = set()
+    with cd(root):
+        # Include everything by default
+        included = _glob("*")
+        excluded = set()
 
-    if patterns:
-        missing_files = []
+        if patterns:
+            missing_files = []
 
-        # Per line in files
-        for item in patterns:
-            # Include all files that are tagged with !require
-            if item.type is lib50_config.PatternType.Required:
-                file = str(Path(item.pattern))
-                if not Path(file).exists():
-                    missing_files.append(file)
-                else:
-                    try:
-                        excluded.remove(file)
-                    except KeyError:
-                        pass
+            # Per line in files
+            for item in patterns:
+                # Include all files that are tagged with !require
+                if item.type is lib50_config.PatternType.Required:
+                    file = str(Path(item.pattern))
+                    if not Path(file).exists():
+                        missing_files.append(file)
                     else:
-                        included.add(file)
-            # Include all files that are tagged with !include
-            elif item.type is lib50_config.PatternType.Included:
-                new_included = _glob(item.pattern)
-                excluded -= new_included
-                included.update(new_included)
-            # Exclude all files that are tagged with !exclude
-            else:
-                new_excluded = _glob(item.pattern)
-                included -= new_excluded
-                excluded.update(new_excluded)
+                        try:
+                            excluded.remove(file)
+                        except KeyError:
+                            pass
+                        else:
+                            included.add(file)
+                # Include all files that are tagged with !include
+                elif item.type is lib50_config.PatternType.Included:
+                    new_included = _glob(item.pattern)
+                    excluded -= new_included
+                    included.update(new_included)
+                # Exclude all files that are tagged with !exclude
+                else:
+                    new_excluded = _glob(item.pattern)
+                    included -= new_excluded
+                    excluded.update(new_excluded)
 
-        if missing_files:
-            raise MissingFilesError(missing_files)
+            if missing_files:
+                raise MissingFilesError(missing_files)
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
