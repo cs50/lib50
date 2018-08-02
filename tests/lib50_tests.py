@@ -10,8 +10,8 @@ import tempfile
 import logging
 import termcolor
 import subprocess
-import push50
-import push50.config
+import lib50
+import lib50.config
 
 class TestConnect(unittest.TestCase):
     def setUp(self):
@@ -27,33 +27,33 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            included, excluded = push50.connect("cs50/problems2/foo/bar", "check50")
+            included, excluded = lib50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(excluded, set())
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            include, excluded = push50.connect("cs50/problems2/foo/bar", "submit50")
+            include, excluded = lib50.connect("cs50/problems2/foo/bar", "submit50")
             self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
     def test_missing_problem(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlugError):
-                push50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
+            with self.assertRaises(lib50.InvalidSlugError):
+                lib50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
 
     def test_no_tool_in_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlugError):
-                push50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
+            with self.assertRaises(lib50.InvalidSlugError):
+                lib50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
 
     def test_no_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(push50.InvalidSlugError):
-                push50.connect("cs50/problems2/foo/no_config", "check50")
+            with self.assertRaises(lib50.InvalidSlugError):
+                lib50.connect("cs50/problems2/foo/no_config", "check50")
 
 class TestFiles(unittest.TestCase):
     def setUp(self):
@@ -71,12 +71,12 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude foo.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
         open("bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"bar.py"})
         self.assertEqual(set(excluded), {"foo.py"})
 
@@ -86,15 +86,15 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(included, set())
         self.assertEqual(excluded, set())
 
         open("foo.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"foo.py"})
 
@@ -105,12 +105,12 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !include foo.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
         open("bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.py"})
 
@@ -120,7 +120,7 @@ class TestFiles(unittest.TestCase):
         open("foo.py", "w").close()
         open("bar.c", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -129,9 +129,9 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !include \"*\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -141,17 +141,17 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !require foo.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
         open("bar.c", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -162,17 +162,17 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !require foo.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
         open("bar.c", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.c"})
 
@@ -182,11 +182,11 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !include foo.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
 
-        included, excluded = push50.files(config, always_exclude=["foo.py"])
+        included, excluded = lib50.files(config, always_exclude=["foo.py"])
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), set())
 
@@ -197,12 +197,12 @@ class TestFiles(unittest.TestCase):
             "    - !exclude foo\n" \
             "    - !include foo/bar\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar"})
         self.assertEqual(set(excluded), set())
 
@@ -213,12 +213,12 @@ class TestFiles(unittest.TestCase):
             "    - !include foo/bar.py\n" \
             "    - !exclude foo\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"foo/bar.py"})
 
@@ -229,12 +229,12 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*.py\"\n" \
             "    - !include foo\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -245,12 +245,12 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*.py\"\n" \
             "    - !include \"foo/*\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -261,12 +261,12 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !include foo\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -280,9 +280,9 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*.py\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"qux.py", "foo/bar.py"})
 
@@ -291,9 +291,9 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"./*.py\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), {"qux.py"})
 
@@ -303,14 +303,14 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*/*.py\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         os.mkdir("foo/bar")
         open("foo/bar/baz.py", "w").close()
         open("foo/qux.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"foo/bar/baz.py"})
         self.assertEqual(set(excluded), {"foo/qux.py"})
 
@@ -320,7 +320,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"foo/**/*.py\"\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         os.mkdir("foo/bar")
@@ -328,7 +328,7 @@ class TestFiles(unittest.TestCase):
         open("foo/bar/baz/qux.py", "w").close()
         open("hello.py", "w").close()
 
-        included, excluded = push50.files(config)
+        included, excluded = lib50.files(config)
         self.assertEqual(set(included), {"hello.py"})
         self.assertEqual(set(excluded), {"foo/bar/baz/qux.py"})
 
@@ -338,10 +338,10 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !require does_not_exist.py\n"
 
-        config = push50.config.load(content, "check50")
+        config = lib50.config.load(content, "check50")
 
-        with self.assertRaises(push50.MissingFilesError):
-            push50.files(config)
+        with self.assertRaises(lib50.MissingFilesError):
+            lib50.files(config)
 
     def test_invalid_utf8_filename(self):
         try:
@@ -349,7 +349,7 @@ class TestFiles(unittest.TestCase):
         except OSError:
             self.skipTest("can't create invalid utf8 filename")
         else:
-            included, excluded = push50.files({})
+            included, excluded = lib50.files({})
             self.assertEqual(included, set())
             self.assertEqual(excluded, {"?("})
 
@@ -364,13 +364,13 @@ class TestLocal(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_local(self):
-        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
         self.assertTrue((local_dir / ".cs50.yaml").is_file())
 
-        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -378,7 +378,7 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
-        local_dir = push50.local("cs50/problems2/foo/bar", "check50")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -405,26 +405,26 @@ class TestWorkingArea(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_empty(self):
-        with push50.working_area([]) as working_area:
+        with lib50.working_area([]) as working_area:
             contents = os.listdir(working_area)
 
         self.assertEqual(contents, [])
 
     def test_one_file(self):
-        with push50.working_area(["foo.py"]) as working_area:
+        with lib50.working_area(["foo.py"]) as working_area:
             contents = os.listdir(working_area)
 
         self.assertEqual(contents, ["foo.py"])
 
     def test_multiple_files(self):
-        with push50.working_area(["foo.py", "bar.c"]) as working_area:
+        with lib50.working_area(["foo.py", "bar.c"]) as working_area:
             contents = os.listdir(working_area)
 
         self.assertEqual(set(contents), {"foo.py", "bar.c"})
 
     def test_include_missing_file(self):
         with self.assertRaises(FileNotFoundError):
-            with push50.working_area(["i_do_not_exist"]) as working_area:
+            with lib50.working_area(["i_do_not_exist"]) as working_area:
                 pass
 
 if __name__ == '__main__':

@@ -29,16 +29,16 @@ import yaml
 
 from . import _
 from .errors import *
-from . import config as push50_config
+from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-LOCAL_PATH = "~/.local/share/push50"
+LOCAL_PATH = "~/.local/share/lib50"
 
-_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
+_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
 def push(org, slug, tool, prompt=lambda included, excluded: True):
@@ -87,7 +87,7 @@ def local(slug, tool, offline=False):
     try:
         with open(problem_path / ".cs50.yaml") as f:
             try:
-                config = push50_config.load(f.read(), tool)
+                config = lib50_config.load(f.read(), tool)
             except InvalidConfigError:
                 raise InvalidSlugError(
                     _("Invalid slug for {}. Did you mean something else?").format(tool))
@@ -137,7 +137,7 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
         # Per line in files
         for item in config["files"]:
             # Include all files that are tagged with !require
-            if item.status is push50_config.FileStatus.Required:
+            if item.status is lib50_config.FileStatus.Required:
                 file = str(Path(item.name))
                 if not Path(file).exists():
                     missing_files.append(file)
@@ -149,7 +149,7 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
                     else:
                         included.add(file)
             # Include all files that are tagged with !include
-            elif item.status is push50_config.FileStatus.Included:
+            elif item.status is lib50_config.FileStatus.Included:
                 new_included = _glob(item.name)
                 excluded -= new_included
                 included.update(new_included)
@@ -191,7 +191,7 @@ def connect(slug, tool):
 
         # Get .cs50.yaml
         try:
-            config = push50_config.load(_get_content(slug.org, slug.repo,
+            config = lib50_config.load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml"), tool)
         except InvalidConfigError:
             raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))

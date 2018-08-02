@@ -30,7 +30,7 @@ ConfigLoader.add_multi_constructor("", InvalidTag)
 
 def load(content, tool, loader=ConfigLoader):
     """
-    Parses content (contents of .cs50.yaml) with push50.config.ConfigLoader
+    Parses content (contents of .cs50.yaml) with lib50.config.ConfigLoader
     Raises InvalidConfigError
     """
     try:
