@@ -13,7 +13,7 @@ setup(
         'lib50': [('**.py', 'python', None),],
     },
     license="GPLv3",
-    description="This is lib50, CS50's internal library for using GitHub as data storage.",
+    description="This is lib50, CS50's own internal library used in many of its tools."
     install_requires=["attrs", "pexpect", "pyyaml", "requests", "termcolor"],
     keywords=["lib50"],
     name="lib50",
