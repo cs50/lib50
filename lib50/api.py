@@ -117,15 +117,7 @@ def working_area(files, name=""):
 
 def files(patterns, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
-    Parses config, returns which files should be included and excluded from cwd.
-    First all files are included.
-    Secondly every line from config["exclude"] is globbed.
-        All files that match a line starting with ! are included
-        All files that match a line not starting with ! are excluded
-        Last line wins
-    Thirdly all files from config["required"] are included.
-    Finally, all entries in always_exclude are globbed.
-        Matched files are silently excluded (do not appear in returned lists)
+    Takes a list of lib50.config.FilePatterns returns which files should be included and excluded from cwd.
     """
     # Include everything by default
     included = _glob("*")
