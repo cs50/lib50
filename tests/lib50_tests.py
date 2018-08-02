@@ -76,7 +76,7 @@ class TestFiles(unittest.TestCase):
         open("foo.py", "w").close()
         open("bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"bar.py"})
         self.assertEqual(set(excluded), {"foo.py"})
 
@@ -88,13 +88,13 @@ class TestFiles(unittest.TestCase):
 
         config = lib50.config.load(content, "check50")
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(included, set())
         self.assertEqual(excluded, set())
 
         open("foo.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"foo.py"})
 
@@ -110,7 +110,7 @@ class TestFiles(unittest.TestCase):
         open("foo.py", "w").close()
         open("bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.py"})
 
@@ -120,7 +120,7 @@ class TestFiles(unittest.TestCase):
         open("foo.py", "w").close()
         open("bar.c", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -131,7 +131,7 @@ class TestFiles(unittest.TestCase):
 
         config = lib50.config.load(content, "check50")
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -145,13 +145,13 @@ class TestFiles(unittest.TestCase):
 
         open("foo.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
         open("bar.c", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py", "bar.c"})
         self.assertEqual(set(excluded), set())
 
@@ -166,13 +166,13 @@ class TestFiles(unittest.TestCase):
 
         open("foo.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), set())
 
         open("bar.c", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.c"})
 
@@ -186,7 +186,7 @@ class TestFiles(unittest.TestCase):
 
         open("foo.py", "w").close()
 
-        included, excluded = lib50.files(config, always_exclude=["foo.py"])
+        included, excluded = lib50.files(config.get("files"), always_exclude=["foo.py"])
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), set())
 
@@ -202,7 +202,7 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         open("foo/bar", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar"})
         self.assertEqual(set(excluded), set())
 
@@ -218,7 +218,7 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"foo/bar.py"})
 
@@ -234,7 +234,7 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -250,7 +250,7 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -266,7 +266,7 @@ class TestFiles(unittest.TestCase):
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), set())
 
@@ -282,7 +282,7 @@ class TestFiles(unittest.TestCase):
 
         config = lib50.config.load(content, "check50")
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), set())
         self.assertEqual(set(excluded), {"qux.py", "foo/bar.py"})
 
@@ -293,7 +293,7 @@ class TestFiles(unittest.TestCase):
 
         config = lib50.config.load(content, "check50")
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar.py"})
         self.assertEqual(set(excluded), {"qux.py"})
 
@@ -310,7 +310,7 @@ class TestFiles(unittest.TestCase):
         open("foo/bar/baz.py", "w").close()
         open("foo/qux.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar/baz.py"})
         self.assertEqual(set(excluded), {"foo/qux.py"})
 
@@ -328,7 +328,7 @@ class TestFiles(unittest.TestCase):
         open("foo/bar/baz/qux.py", "w").close()
         open("hello.py", "w").close()
 
-        included, excluded = lib50.files(config)
+        included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"hello.py"})
         self.assertEqual(set(excluded), {"foo/bar/baz/qux.py"})
 
@@ -341,7 +341,7 @@ class TestFiles(unittest.TestCase):
         config = lib50.config.load(content, "check50")
 
         with self.assertRaises(lib50.MissingFilesError):
-            lib50.files(config)
+            lib50.files(config.get("files"))
 
     def test_invalid_utf8_filename(self):
         try:

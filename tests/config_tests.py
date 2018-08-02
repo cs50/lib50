@@ -31,7 +31,7 @@ class TestLoad(unittest.TestCase):
             "  files:\n" \
             "    - !include foo"
         config = lib50.config.load(content, "check50")
-        self.assertTrue(config["files"][0].status == lib50.config.FileStatus.Included)
+        self.assertTrue(config["files"][0].type == lib50.config.PatternType.Included)
 
     def test_exclude_file(self):
         content = \
@@ -39,7 +39,7 @@ class TestLoad(unittest.TestCase):
             "  files:\n" \
             "    - !exclude foo"
         config = lib50.config.load(content, "check50")
-        self.assertTrue(config["files"][0].status == lib50.config.FileStatus.Excluded)
+        self.assertTrue(config["files"][0].type == lib50.config.PatternType.Excluded)
 
     def test_require_file(self):
         content = \
@@ -47,7 +47,7 @@ class TestLoad(unittest.TestCase):
             "  files:\n" \
             "    - !require foo"
         config = lib50.config.load(content, "check50")
-        self.assertTrue(config["files"][0].status == lib50.config.FileStatus.Required)
+        self.assertTrue(config["files"][0].type == lib50.config.PatternType.Required)
 
 if __name__ == '__main__':
     unittest.main()

@@ -115,7 +115,7 @@ def working_area(files, name=""):
         yield dir
 
 
-def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
+def files(patterns, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
     """
     Parses config, returns which files should be included and excluded from cwd.
     First all files are included.
@@ -131,14 +131,14 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
     included = _glob("*")
     excluded = set()
 
-    if "files" in config:
+    if patterns:
         missing_files = []
 
         # Per line in files
-        for item in config["files"]:
+        for item in patterns:
             # Include all files that are tagged with !require
-            if item.status is lib50_config.FileStatus.Required:
-                file = str(Path(item.name))
+            if item.type is lib50_config.PatternType.Required:
+                file = str(Path(item.pattern))
                 if not Path(file).exists():
                     missing_files.append(file)
                 else:
@@ -149,13 +149,13 @@ def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]
                     else:
                         included.add(file)
             # Include all files that are tagged with !include
-            elif item.status is lib50_config.FileStatus.Included:
-                new_included = _glob(item.name)
+            elif item.type is lib50_config.PatternType.Included:
+                new_included = _glob(item.pattern)
                 excluded -= new_included
                 included.update(new_included)
             # Exclude all files that are tagged with !exclude
             else:
-                new_excluded = _glob(item.name)
+                new_excluded = _glob(item.pattern)
                 included -= new_excluded
                 excluded.update(new_excluded)
 
@@ -203,7 +203,7 @@ def connect(slug, tool):
         if not isinstance(config, dict):
             config = {}
 
-        included, excluded = files(config)
+        included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
         if not included:
