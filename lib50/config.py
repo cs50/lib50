@@ -8,29 +8,36 @@ try:
 except ImportError:
     from yaml import SafeLoader
 
+
 class InvalidTag:
     def __init__(self, loader, prefix, node):
         self.tag = node.tag
 
-class FileStatus(enum.Enum):
+
+class PatternType(enum.Enum):
     Excluded = "!exclude"
     Included = "!include"
     Required = "!require"
 
-class File:
-    def __init__(self, loader, node):
-        self.status = FileStatus(node.tag)
-        self.name = node.value
+
+class FilePattern:
+    def __init__(self, pattern_type, pattern):
+        self.type = pattern_type
+        self.pattern = pattern
+
 
 class ConfigLoader(SafeLoader):
     pass
-for member in FileStatus.__members__.values():
-    ConfigLoader.add_constructor(member.value, File)
+
+
+for member in PatternType.__members__.values():
+    ConfigLoader.add_constructor(member.value, lambda loader, node : FilePattern(PatternType(node.tag), node.value))
 ConfigLoader.add_multi_constructor("", InvalidTag)
+
 
 def load(content, tool, loader=ConfigLoader):
     """
-    Parses content (contents of .cs50.yaml) with push50.config.ConfigLoader
+    Parses content (contents of .cs50.yaml) with lib50.config.ConfigLoader
     Raises InvalidConfigError
     """
     try:
@@ -52,7 +59,7 @@ def load(content, tool, loader=ConfigLoader):
             raise errors.InvalidConfigError(_("files: entry in config must be a list"))
 
         for file in files:
-            if not isinstance(file, File):
+            if not isinstance(file, FilePattern):
                 raise errors.InvalidConfigError(
                     _("All entries in files: must be tagged with either !include, !exclude or !require"))
 

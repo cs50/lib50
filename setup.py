@@ -10,17 +10,16 @@ setup(
         "Topic :: Utilities"
     ],
     message_extractors = {
-        'push50': [('**.py', 'python', None),],
+        'lib50': [('**.py', 'python', None),],
     },
     license="GPLv3",
-    description="This is push50, CS50's internal library for using GitHub as data storage.",
+    description="This is lib50, CS50's own internal library used in many of its tools.",
     install_requires=["attrs", "pexpect", "pyyaml", "requests", "termcolor"],
-    keywords=["push50"],
-    name="push50",
+    keywords=["lib50"],
+    name="lib50",
     python_requires=">= 3.6",
-    packages=["push50"],
-    url="https://github.com/cs50/push50",
-    version="1.0.1",
-    package_data={'': ['locale/*/*/*.mo', 'locale/*/*/*.po']},
+    packages=["lib50"],
+    url="https://github.com/cs50/lib50",
+    version="1.0.0",
     include_package_data=True
 )

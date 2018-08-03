@@ -1,1 +1,1 @@
-recursive-include push50/locale *
+recursive-include lib50/locale *

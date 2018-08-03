@@ -29,16 +29,16 @@ import yaml
 
 from . import _
 from .errors import *
-from . import config as push50_config
+from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-LOCAL_PATH = "~/.local/share/push50"
+LOCAL_PATH = "~/.local/share/lib50"
 
-_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/push50").expanduser()
+_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
 def push(org, slug, tool, prompt=lambda included, excluded: True):
@@ -87,7 +87,7 @@ def local(slug, tool, offline=False):
     try:
         with open(problem_path / ".cs50.yaml") as f:
             try:
-                config = push50_config.load(f.read(), tool)
+                config = lib50_config.load(f.read(), tool)
             except InvalidConfigError:
                 raise InvalidSlugError(
                     _("Invalid slug for {}. Did you mean something else?").format(tool))
@@ -115,52 +115,55 @@ def working_area(files, name=""):
         yield dir
 
 
-def files(config, always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
-    """
-    Parses config, returns which files should be included and excluded from cwd.
-    First all files are included.
-    Secondly every line from config["exclude"] is globbed.
-        All files that match a line starting with ! are included
-        All files that match a line not starting with ! are excluded
-        Last line wins
-    Thirdly all files from config["required"] are included.
-    Finally, all entries in always_exclude are globbed.
-        Matched files are silently excluded (do not appear in returned lists)
-    """
-    # Include everything by default
-    included = _glob("*")
-    excluded = set()
+@contextlib.contextmanager
+def cd(dest):
+    origin = os.getcwd()
+    try:
+        os.chdir(dest)
+        yield dest
+    finally:
+        os.chdir(origin)
 
-    if "files" in config:
-        missing_files = []
 
-        # Per line in files
-        for item in config["files"]:
-            # Include all files that are tagged with !require
-            if item.status is push50_config.FileStatus.Required:
-                file = str(Path(item.name))
-                if not Path(file).exists():
-                    missing_files.append(file)
-                else:
-                    try:
-                        excluded.remove(file)
-                    except KeyError:
-                        pass
+def files(patterns, root=".", always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
+    """
+    Takes a list of lib50.config.FilePatterns returns which files should be included and excluded from cwd.
+    """
+    with cd(root):
+        # Include everything by default
+        included = _glob("*")
+        excluded = set()
+
+        if patterns:
+            missing_files = []
+
+            # Per line in files
+            for item in patterns:
+                # Include all files that are tagged with !require
+                if item.type is lib50_config.PatternType.Required:
+                    file = str(Path(item.pattern))
+                    if not Path(file).exists():
+                        missing_files.append(file)
                     else:
-                        included.add(file)
-            # Include all files that are tagged with !include
-            elif item.status is push50_config.FileStatus.Included:
-                new_included = _glob(item.name)
-                excluded -= new_included
-                included.update(new_included)
-            # Exclude all files that are tagged with !exclude
-            else:
-                new_excluded = _glob(item.name)
-                included -= new_excluded
-                excluded.update(new_excluded)
+                        try:
+                            excluded.remove(file)
+                        except KeyError:
+                            pass
+                        else:
+                            included.add(file)
+                # Include all files that are tagged with !include
+                elif item.type is lib50_config.PatternType.Included:
+                    new_included = _glob(item.pattern)
+                    excluded -= new_included
+                    included.update(new_included)
+                # Exclude all files that are tagged with !exclude
+                else:
+                    new_excluded = _glob(item.pattern)
+                    included -= new_excluded
+                    excluded.update(new_excluded)
 
-        if missing_files:
-            raise MissingFilesError(missing_files)
+            if missing_files:
+                raise MissingFilesError(missing_files)
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
@@ -191,7 +194,7 @@ def connect(slug, tool):
 
         # Get .cs50.yaml
         try:
-            config = push50_config.load(_get_content(slug.org, slug.repo,
+            config = lib50_config.load(_get_content(slug.org, slug.repo,
                                                  slug.branch, slug.problem / ".cs50.yaml"), tool)
         except InvalidConfigError:
             raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
@@ -203,7 +206,7 @@ def connect(slug, tool):
         if not isinstance(config, dict):
             config = {}
 
-        included, excluded = files(config)
+        included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
         if not included:
