@@ -353,6 +353,17 @@ class TestFiles(unittest.TestCase):
             self.assertEqual(included, set())
             self.assertEqual(excluded, {"?("})
 
+    def test_from_root(self):
+        os.mkdir("foo")
+        os.mkdir("foo/bar")
+        os.mkdir("foo/bar/baz")
+        open("foo/bar/baz/qux.py", "w").close()
+        open("foo/hello.py", "w").close()
+
+        included, excluded = lib50.files([], root="foo")
+        self.assertEqual(included, {"bar/baz/qux.py", "hello.py"})
+        self.assertEqual(excluded, set())
+
 class TestLocal(unittest.TestCase):
     def setUp(self):
         self.working_directory = tempfile.TemporaryDirectory()
