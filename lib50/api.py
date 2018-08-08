@@ -41,14 +41,14 @@ LOCAL_PATH = "~/.local/share/lib50"
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
-def push(org, slug, tool, prompt=lambda included, excluded: True):
+def push(tool, slug, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
     check_dependencies()
 
-    included, excluded = connect(slug, tool)
+    org, (included, excluded) = connect(slug, tool)
 
     with authenticate(org) as user, prepare(tool, slug, user, included):
         if prompt(included, excluded):
@@ -206,13 +206,14 @@ def connect(slug, tool):
         if not isinstance(config, dict):
             config = {}
 
+        org = config.get("org", tool)
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return included, excluded
+        return org, (included, excluded)
 
 
 @contextlib.contextmanager

@@ -27,8 +27,9 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            included, excluded = lib50.connect("cs50/problems2/foo/bar", "check50")
+            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(excluded, set())
+            self.assertEqual(org, "check50")
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
@@ -352,6 +353,17 @@ class TestFiles(unittest.TestCase):
             included, excluded = lib50.files({})
             self.assertEqual(included, set())
             self.assertEqual(excluded, {"?("})
+
+    def test_from_root(self):
+        os.mkdir("foo")
+        os.mkdir("foo/bar")
+        os.mkdir("foo/bar/baz")
+        open("foo/bar/baz/qux.py", "w").close()
+        open("foo/hello.py", "w").close()
+
+        included, excluded = lib50.files([], root="foo")
+        self.assertEqual(included, {"bar/baz/qux.py", "hello.py"})
+        self.assertEqual(excluded, set())
 
 class TestLocal(unittest.TestCase):
     def setUp(self):
