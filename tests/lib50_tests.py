@@ -27,8 +27,9 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            included, excluded = lib50.connect("cs50/problems2/foo/bar", "check50")
+            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(excluded, set())
+            self.assertEqual(org, "check50")
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
