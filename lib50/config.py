@@ -10,6 +10,7 @@ except ImportError:
 
 
 class InvalidTag:
+    """Class representing unrecognized tags"""
     def __init__(self, loader, prefix, node):
         self.tag = node.tag
 
@@ -21,6 +22,7 @@ class PatternType(enum.Enum):
 
 
 class FilePattern:
+    """Class representing valid file pattern tags"""
     def __init__(self, pattern_type, pattern):
         self.type = pattern_type
         self.pattern = pattern
@@ -30,8 +32,11 @@ class ConfigLoader(SafeLoader):
     pass
 
 
+# Register FilePattern object for !require/!include/!exclude tags
 for member in PatternType.__members__.values():
     ConfigLoader.add_constructor(member.value, lambda loader, node : FilePattern(PatternType(node.tag), node.value))
+
+# Register InvalidTag for all other tags
 ConfigLoader.add_multi_constructor("", InvalidTag)
 
 
@@ -69,12 +74,14 @@ def load(content, tool, loader=ConfigLoader):
 
 def _validate_config(config, tool):
     if isinstance(config, dict):
-        for item in config:
-            _validate_config(config[item], tool)
+        # Recursively validate each item in the config
+        for val in config.values():
+            _validate_config(val, tool)
 
     elif isinstance(config, list):
+        # Recursively validate each item in the config
         for item in config:
             _validate_config(item, tool)
 
     elif isinstance(config, InvalidTag):
-        raise errors.InvalidConfigError("{} is not a valid tag for {}".format(config.tag, tool))
+        raise errors.InvalidConfigError(_("{} is not a valid tag for {}".format(config.tag, tool)))

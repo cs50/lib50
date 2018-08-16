@@ -3,10 +3,10 @@ import contextlib
 import copy
 import datetime
 import gettext
+import glob
 import itertools
 import logging
 import os
-import glob
 from pathlib import Path
 import pkg_resources
 import re
@@ -73,8 +73,10 @@ def local(slug, tool, offline=False):
         _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
 
     if not offline:
+        # Get latest version of checks
         _run(git(f"fetch origin {slug.branch}"))
 
+    # Ensure that local copy of the repo is identical to remote copy
     _run(git(f"checkout -B {slug.branch} origin/{slug.branch}"))
     _run(git(f"reset --hard HEAD"))
 
@@ -117,6 +119,7 @@ def working_area(files, name=""):
 
 @contextlib.contextmanager
 def cd(dest):
+    """ Temporarily cd into a directory"""
     origin = os.getcwd()
     try:
         os.chdir(dest)
@@ -227,6 +230,7 @@ def authenticate(org):
         user = _authenticate_ssh(org)
         progress_bar.stop()
         if user is None:
+            # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org) as user:
                 yield user
         else:
@@ -290,7 +294,14 @@ def upload(branch, user, tool):
     """
     with ProgressBar(_("Uploading")):
         language = os.environ.get("LANGUAGE")
-        commit_message = _("automated commit by {}{}").format(tool, f" [{language}]" if language else "")
+        commit_message = [_("automated commit by {}").format(tool)]
+
+        # If LANGUAGE environment variable is set, we need to communicate
+        # this to any remote tool via the commit message.
+        if language:
+            commit_message.append(f"[{language}]")
+
+        commit_message = " ".join(commit_message)
 
         # Commit + push
         git = Git(Git.working_area)
@@ -407,6 +418,7 @@ class Slug:
         else:
             get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
         try:
+            # Parse get_refs output for the actual branch names
             return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
         except Error:
             return []
@@ -474,9 +486,10 @@ def _spawn(command, quiet=False, timeout=None):
 
     try:
         if not quiet:
+            # Log command output to logger
             child.logfile_read = _StreamToLogger(logger.debug)
         yield child
-    except:
+    except BaseException:
         child.close()
         raise
     else:
@@ -601,6 +614,7 @@ def _authenticate_https(org):
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
         git = Git(Git.cache)
 
+        # Get credentials from cache if possible
         with _spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
@@ -614,10 +628,12 @@ def _authenticate_https(org):
                 child.close()
                 child.exitstatus = 0
 
+        # No credentials found, need to ask user
         if password is None:
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
 
+        # Check if credentials are correct
         res = requests.get("https://api.github.com/user", auth=(username, password))
 
         # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
@@ -636,6 +652,7 @@ def _authenticate_https(org):
         # Especially if user logged in via email address
         username = res.json()["login"]
 
+        # Credentials are correct, best cache them
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
@@ -646,7 +663,8 @@ def _authenticate_https(org):
 
         yield User(name=username,
                    repo=f"https://{username}@github.com/{org}/{username}")
-    except:
+    except BaseException:
+        # Some error occured while this context manager is active, best forget credentials.
         logout()
         raise
 
@@ -665,7 +683,7 @@ def _prompt_username(prompt="Username: ", prefill=None):
 
 
 def _prompt_password(prompt="Password: "):
-    """Prompt the user for password."""
+    """Prompt the user for password, printing asterisks for each character"""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     tty.setraw(fd)
