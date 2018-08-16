@@ -1,5 +1,4 @@
 import os
-import pathlib
 from . import _
 
 class Error(Exception):
