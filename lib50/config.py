@@ -153,8 +153,13 @@ class Loader:
                 self._apply_scope(item, tags)
 
         elif isinstance(config, TaggedValue):
+            tagged_value = config
+
             # add all local tags
-            config.tags |= set(tags)
+            tagged_value.tags |= set(tags)
+            for tag in tags:
+                if not hasattr(tagged_value, tag):
+                    setattr(tagged_value, tag, False)
 
     @staticmethod
     def _ensure_exclamation(tags):
