@@ -1,6 +1,7 @@
-import unittest
 import sys
-import lib50.errors
+import unittest
+
+import lib50._errors
 import lib50.config
 
 class TestLoader(unittest.TestCase):
@@ -57,7 +58,7 @@ class TestLoader(unittest.TestCase):
             "    - !include foo"
         loader = lib50.config.Loader("check50")
         loader.scope("files", "include", default=False)
-        with self.assertRaises(lib50.errors.InvalidConfigError):
+        with self.assertRaises(lib50._errors.InvalidConfigError):
             config = loader.load(content)
 
     def test_no_default(self):
@@ -67,7 +68,7 @@ class TestLoader(unittest.TestCase):
             "    - !INVALID foo"
         loader = lib50.config.Loader("check50")
         loader.scope("files", "include", default=False)
-        with self.assertRaises(lib50.errors.InvalidConfigError):
+        with self.assertRaises(lib50._errors.InvalidConfigError):
             config = loader.load(content)
 
     def test_local_default(self):

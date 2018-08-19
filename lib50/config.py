@@ -1,7 +1,9 @@
-import enum
-import yaml
 import collections
-from . import errors
+import enum
+
+import yaml
+
+from ._errors import InvalidConfigError
 from . import _
 
 try:
@@ -49,7 +51,7 @@ class Loader:
         try:
             config = yaml.load(content, Loader=self._loader(self._global_tags))
         except yaml.YAMLError:
-            raise errors.InvalidConfigError(_("Config is not valid yaml."))
+            raise InvalidConfigError(_("Config is not valid yaml."))
 
         # Try extracting just the tool portion
         try:
@@ -109,7 +111,7 @@ class Loader:
 
             # if tagged_value is invalid, error
             if tagged_value.tag not in tagged_value.tags:
-                raise errors.InvalidConfigError(_("{} is not a valid tag for {}".format(tagged_value.tag, self.tool)))
+                raise InvalidConfigError(_("{} is not a valid tag for {}".format(tagged_value.tag, self.tool)))
 
     def _apply_default(self, config, default):
         """
@@ -205,7 +207,7 @@ def load(content, tool, loader=ConfigLoader):
     try:
         config = yaml.load(content, Loader=loader)
     except yaml.YAMLError:
-        raise errors.InvalidConfigError(_("Config is not valid yaml."))
+        raise InvalidConfigError(_("Config is not valid yaml."))
 
     try:
         config = config[tool]
@@ -218,11 +220,11 @@ def load(content, tool, loader=ConfigLoader):
         pass
     else:
         if not isinstance(files, list):
-            raise errors.InvalidConfigError(_("files: entry in config must be a list"))
+            raise InvalidConfigError(_("files: entry in config must be a list"))
 
         for file in files:
             if not isinstance(file, FilePattern):
-                raise errors.InvalidConfigError(
+                raise InvalidConfigError(
                     _("All entries in files: must be tagged with either !include, !exclude or !require"))
 
     _validate_config(config, tool)
@@ -241,4 +243,4 @@ def _validate_config(config, tool):
             _validate_config(item, tool)
 
     elif isinstance(config, InvalidTag):
-        raise errors.InvalidConfigError(_("{} is not a valid tag for {}".format(config.tag, tool)))
+        raise InvalidConfigError(_("{} is not a valid tag for {}".format(config.tag, tool)))

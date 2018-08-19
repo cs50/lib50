@@ -1,9 +1,11 @@
-import gettext
-import pkg_resources
+import gettext as _gettext
+import pkg_resources as _pkg_resources
 
 # Internationalization
-_ = gettext.translation("lib50", pkg_resources.resource_filename("lib50", "locale"), fallback=True).gettext
+_ = _gettext.translation("lib50", _pkg_resources.resource_filename("lib50", "locale"), fallback=True).gettext
 
-from .api import *
-from .errors import *
+LOCAL_PATH = "~/.local/share/lib50"
+
+from ._api import *
+from ._errors import *
 from . import config

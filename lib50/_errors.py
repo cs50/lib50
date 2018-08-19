@@ -1,6 +1,8 @@
 import os
 from . import _
 
+__all__ = ["Error", "InvalidSlugError", "MissingFilesError", "InvalidConfigError"]
+
 class Error(Exception):
     pass
 
