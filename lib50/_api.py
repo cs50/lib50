@@ -39,14 +39,14 @@ logger.addHandler(logging.NullHandler())
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
-def push(tool, slug, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
     check_dependencies()
 
-    org, (included, excluded) = connect(slug, tool)
+    org, (included, excluded) = connect(slug, config_loader)
 
     with authenticate(org) as user, prepare(tool, slug, user, included):
         if prompt(included, excluded):
@@ -55,7 +55,7 @@ def push(tool, slug, prompt=lambda included, excluded: True):
             raise Error(_("No files were submitted."))
 
 
-def local(tool, slug, offline=False):
+def local(tool, slug, config_loader, offline=False):
     """
     Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
@@ -83,15 +83,11 @@ def local(tool, slug, offline=False):
     if not problem_path.exists():
         raise InvalidSlugError(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
 
-    # Configure a config loader
-    loader = lib50_config.Loader(tool)
-    loader.scope("files", "exclude", "include", "require")
-
     # Get config
     try:
         with open(problem_path / ".cs50.yaml") as f:
             try:
-                config = loader.load(f.read())
+                config = config_loader.load(f.read())
             except InvalidConfigError:
                 raise InvalidSlugError(
                     _("Invalid slug for {}. Did you mean something else?").format(tool))
@@ -206,7 +202,7 @@ def files(patterns,
     return included, excluded
 
 
-def connect(slug, tool):
+def connect(slug, config_loader):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
@@ -216,25 +212,23 @@ def connect(slug, tool):
         # Parse slug
         slug = Slug(slug)
 
-        # Configure a config loader
-        loader = lib50_config.Loader(tool)
-        loader.scope("files", "exclude", "include", "require")
-
         # Get .cs50.yaml
         try:
-            config = loader.load(_get_content(slug.org, slug.repo,
+            config = config_loader.load(_get_content(slug.org, slug.repo,
                                               slug.branch, slug.problem / ".cs50.yaml"))
         except InvalidConfigError:
-            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
+
+        print("WTF!!!!", config)
 
         if not config:
-            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 
         # If config of tool is just a truthy value, config should be empty
         if not isinstance(config, dict):
             config = {}
 
-        org = config.get("org", tool)
+        org = config.get("org", config_loader.tool)
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged

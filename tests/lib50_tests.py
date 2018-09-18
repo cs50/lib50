@@ -15,6 +15,9 @@ import lib50.config
 
 class TestConnect(unittest.TestCase):
     def setUp(self):
+        self.loader = lib50.config.Loader("check50")
+        self.loader.scope("files", "exclude", "include", "require")
+
         self.working_directory = tempfile.TemporaryDirectory()
         self._wd = os.getcwd()
         os.chdir(self.working_directory.name)
@@ -27,14 +30,16 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", "check50")
+            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", self.loader)
             self.assertEqual(excluded, set())
             self.assertEqual(org, "check50")
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
+        loader = lib50.config.Loader("submit50")
+        loader.scope("files", "exclude", "include", "require")
         with contextlib.redirect_stdout(f):
-            include, excluded = lib50.connect("cs50/problems2/foo/bar", "submit50")
+            include, excluded = lib50.connect("cs50/problems2/foo/bar", loader)
             self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -42,19 +47,20 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
+                lib50.connect("cs50/problems2/foo/i_do_not_exist", self.loader)
 
     def test_no_tool_in_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
+                loader = lib50.config.Loader("i_do_not_exist")
+                lib50.connect("cs50/problems2/foo/bar", loader)
 
     def test_no_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/problems2/foo/no_config", "check50")
+                lib50.connect("cs50/problems2/foo/no_config", self.loader)
 
 class TestFiles(unittest.TestCase):
     def setUp(self):
@@ -426,6 +432,9 @@ class TestFiles(unittest.TestCase):
 
 class TestLocal(unittest.TestCase):
     def setUp(self):
+        self.loader = lib50.config.Loader("check50")
+        self.loader.scope("files", "include", "exclude", "require")
+
         self.working_directory = tempfile.TemporaryDirectory()
         self._wd = os.getcwd()
         os.chdir(self.working_directory.name)
@@ -435,13 +444,13 @@ class TestLocal(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_local(self):
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar")
+        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
         self.assertTrue((local_dir / ".cs50.yaml").is_file())
 
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar")
+        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -449,7 +458,7 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar")
+        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
