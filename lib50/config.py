@@ -13,10 +13,22 @@ except ImportError:
 
 
 class TaggedValue:
+    """A value tagged in a .yaml file"""
+
     def __init__(self, value, tag, *tags):
-        for t in tags:
+        """
+        value - the actual value
+        tag - the yaml tag
+        tags - all possible valid tags for this value
+        """
+        tag = tag if tag.startswith("!") else "!" + tag
+
+        tags = list(tags)
+        for i, t in enumerate(tags):
+            tags[i] = t if t.startswith("!") else "!" + t
             setattr(self, t[1:], False)
         setattr(self, tag[1:], True)
+
         self.tag = tag
         self.tags = set(tags)
         self.value = value
