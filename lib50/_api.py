@@ -75,7 +75,7 @@ def local(tool, slug, config_loader, offline=False):
         _run(git(f"fetch origin {slug.branch}"))
 
     # Ensure that local copy of the repo is identical to remote copy
-    _run(git(f"checkout -B {slug.branch} origin/{slug.branch}"))
+    _run(git(f"checkout -f -B {slug.branch} origin/{slug.branch}"))
     _run(git(f"reset --hard HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
