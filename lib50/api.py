@@ -618,7 +618,7 @@ def _authenticate_https(org):
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
 
-        res = requests.get("https://api.github.com/user", auth=(username, password))
+        res = requests.get("https://api.github.com/user", auth=(username, password.encode('utf8')))
 
         # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
         if "X-GitHub-OTP" in res.headers:
