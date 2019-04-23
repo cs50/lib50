@@ -666,32 +666,53 @@ def _prompt_username(prompt="Username: ", prefill=None):
 
 def _prompt_password(prompt="Password: "):
     """Prompt the user for password."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-
     print(prompt, end="", flush=True)
-    password = []
-    try:
+    password_bytes = []
+    password_string = ""
+
+    with _no_echo_stdin():
         while True:
+            # Read one byte
             ch = sys.stdin.buffer.read(1)[0]
-            if ch in (ord("\r"), ord("\n"), 4):  # If user presses Enter or ctrl-d
+            # If user presses Enter or ctrl-d
+            if ch in (ord("\r"), ord("\n"), 4):
                 print("\r")
                 break
-            elif ch == 127:  # DEL
-                try:
-                    password.pop()
-                except IndexError:
-                    pass
-                else:
+            # Del
+            elif ch == 127:
+                if len(password_string) > 0:
                     print("\b \b", end="", flush=True)
-            elif ch == 3:  # ctrl-c
+                # Remove last char and its corresponding bytes
+                password_string = password_string[:-1]
+                password_bytes = list(password_string.encode("utf8"))
+            # Ctrl-c
+            elif ch == 3:
                 print("^C", end="", flush=True)
                 raise KeyboardInterrupt
             else:
-                password.append(ch)
-                print("*", end="", flush=True)
+                password_bytes.append(ch)
+
+                # If byte added concludes a utf8 char, print *
+                try:
+                    password_string = bytes(password_bytes).decode("utf8")
+                except UnicodeDecodeError:
+                    pass
+                else:
+                    print("*", end="", flush=True)
+
+    return password_string
+
+
+@contextlib.contextmanager
+def _no_echo_stdin():
+    """
+    On Unix only, have stdin not echo input.
+    https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    try:
+        yield
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    return bytes(password).decode()

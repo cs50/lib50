@@ -1,9 +1,11 @@
 import unittest
 import os
+import sys
 import contextlib
 import pathlib
 import tempfile
 import io
+import re
 import logging
 import subprocess
 import time
@@ -162,6 +164,69 @@ class TestProgressBar(unittest.TestCase):
                 lib50.api.ProgressBar.TICKS_PER_SECOND = old_ticks_per_second
 
         self.assertEqual("foo...\n", f.getvalue())
+
+class TestPromptPassword(unittest.TestCase):
+    @contextlib.contextmanager
+    def replace_stdin(self):
+        old = sys.stdin
+        try:
+            with tempfile.TemporaryFile() as stdin_f:
+                sys.stdin = stdin_f
+                sys.stdin.buffer = sys.stdin
+                yield sys.stdin
+        finally:
+            sys.stdin = old
+
+    @contextlib.contextmanager
+    def mock_no_echo_stdin(self):
+        @contextlib.contextmanager
+        def mock():
+            yield
+
+        old = lib50.api._no_echo_stdin
+        try:
+            lib50.api._no_echo_stdin = mock
+            yield mock
+        finally:
+            lib50.api._no_echo_stdin = old
+
+    def test_ascii(self):
+        f = io.StringIO()
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write(bytes("foo\n".encode("utf8")))
+            sys.stdin.seek(0)
+            password = lib50.api._prompt_password()
+
+        self.assertEqual(password, "foo")
+        self.assertEqual(f.getvalue().count("*"), 3)
+
+    def test_unicode(self):
+        f = io.StringIO()
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write(bytes("↔♣¾€\n".encode("utf8")))
+            sys.stdin.seek(0)
+            password = lib50.api._prompt_password()
+
+        self.assertEqual(password, "↔♣¾€")
+        self.assertEqual(f.getvalue().count("*"), 4)
+
+    def test_unicode_del(self):
+        def resolve_backspaces(str):
+            while True:
+                temp = re.sub('.\b', '', str, count=1)
+                if len(str) == len(temp):
+                    return re.sub('\b+', '', temp)
+                str = temp
+
+        f = io.StringIO()
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write(bytes(f"↔{chr(127)}♣¾{chr(127)}€\n".encode("utf8")))
+            sys.stdin.seek(0)
+            password = lib50.api._prompt_password()
+
+        self.assertEqual(password, "♣€")
+        self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
+
 
 if __name__ == '__main__':
     unittest.main()
