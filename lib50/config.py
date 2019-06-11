@@ -99,7 +99,7 @@ class Loader:
         try:
             config = config[self.tool]
         except (TypeError, KeyError):
-            return None
+            raise MissingToolError("No entry for {} found in config file.".format(self.tool))
 
         # If no scopes, just apply global default
         if not isinstance(config, dict):

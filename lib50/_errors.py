@@ -20,3 +20,6 @@ class MissingFilesError(Error):
 
 class InvalidConfigError(Error):
     pass
+
+class MissingToolError(InvalidConfigError):
+    pass

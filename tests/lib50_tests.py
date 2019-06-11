@@ -32,6 +32,7 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", self.loader)
             self.assertEqual(excluded, set())
+
             self.assertEqual(org, "check50")
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -482,13 +483,13 @@ class TestLocal(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_local(self):
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
+        local_dir = lib50.local("cs50/problems2/foo/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
         self.assertTrue((local_dir / ".cs50.yaml").is_file())
 
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
+        local_dir = lib50.local("cs50/problems2/foo/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -496,7 +497,7 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
-        local_dir = lib50.local("check50", "cs50/problems2/foo/bar", self.loader)
+        local_dir = lib50.local("cs50/problems2/foo/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())

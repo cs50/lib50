@@ -55,7 +55,7 @@ def push(tool, slug, config_loader, prompt=lambda included, excluded: True):
             raise Error(_("No files were submitted."))
 
 
-def local(tool, slug, config_loader, offline=False):
+def local(slug, offline=False):
     """
     Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
@@ -82,18 +82,6 @@ def local(tool, slug, config_loader, offline=False):
 
     if not problem_path.exists():
         raise InvalidSlugError(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
-
-    # Get config
-    try:
-        config_filepath = lib50_config.get_config_filepath(problem_path)
-        with open(config_filepath) as f:
-            try:
-                config = config_loader.load(f.read())
-            except InvalidConfigError:
-                raise InvalidSlugError(
-                    _("Invalid slug for {}. Did you mean something else?").format(tool))
-    except FileNotFoundError:
-        raise InvalidSlugError(_("Invalid slug. Did you mean something else?"))
 
     return problem_path
 
