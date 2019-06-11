@@ -401,8 +401,18 @@ class Slug:
         remainder = slug[idx + 1:]
         self.org, self.repo = slug.split("/")[:2]
 
+        # Gather all branches
+        try:
+            branches = self._get_branches()
+        except TimeoutError:
+            if not args.offline:
+                raise ConnectionError("Could not connect to GitHub, it seems you are offline.")
+            branches = []
+        except Error:
+            branches = []
+
         # Find a matching branch
-        for branch in self._get_branches():
+        for branch in branches:
             if remainder.startswith(f"{branch}"):
                 self.branch = branch
                 self.problem = Path(remainder[len(branch) + 1:])
@@ -429,11 +439,11 @@ class Slug:
             get_refs = f"git -C {shlex.quote(str(local_path))} show-ref --heads"
         else:
             get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
-        try:
-            # Parse get_refs output for the actual branch names
-            return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
-        except Error:
-            return []
+
+        # Parse get_refs output for the actual branch names
+        return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
+
+
 
 
 class ProgressBar:
@@ -523,7 +533,7 @@ def _run(command, quiet=False, timeout=None):
             command_output = child.read().strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
-        raise Error()
+        raise TimeoutError(timeout)
 
     return command_output
 

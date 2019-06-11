@@ -1,7 +1,7 @@
 import os
 from . import _
 
-__all__ = ["Error", "InvalidSlugError", "MissingFilesError", "InvalidConfigError"]
+__all__ = ["Error", "InvalidSlugError", "MissingFilesError", "InvalidConfigError", "MissingToolError", "TimeoutError", "ConnectionError"]
 
 class Error(Exception):
     pass
@@ -22,4 +22,10 @@ class InvalidConfigError(Error):
     pass
 
 class MissingToolError(InvalidConfigError):
+    pass
+
+class TimeoutError(Error):
+    pass
+
+class ConnectionError(Error):
     pass

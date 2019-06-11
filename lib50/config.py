@@ -4,7 +4,7 @@ import enum
 import yaml
 import os
 import pathlib
-from ._errors import InvalidConfigError, Error
+from ._errors import InvalidConfigError, Error, MissingToolError
 from . import _
 
 try:

@@ -10,8 +10,8 @@ import lib50.config
 class TestLoader(unittest.TestCase):
     def test_no_tool(self):
         content = ""
-        config = lib50.config.Loader("check50").load(content)
-        self.assertEqual(config, None)
+        with self.assertRaises(lib50._errors.MissingToolError):
+            config = lib50.config.Loader("check50").load(content)
 
     def test_falsy_tool(self):
         content = "check50: false"
