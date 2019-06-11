@@ -4,7 +4,9 @@ from . import _
 __all__ = ["Error", "InvalidSlugError", "MissingFilesError", "InvalidConfigError", "MissingToolError", "TimeoutError", "ConnectionError"]
 
 class Error(Exception):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.payload = {}
 
 class InvalidSlugError(Error):
     pass
@@ -17,6 +19,8 @@ class MissingFilesError(Error):
             "\n".join(files),
             _("You are currently in: {}, did you perhaps intend another directory?".format(cwd))
         ))
+        self.payload.update(files=files, dir=cwd)
+
 
 class InvalidConfigError(Error):
     pass
