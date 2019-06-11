@@ -85,7 +85,8 @@ def local(tool, slug, config_loader, offline=False):
 
     # Get config
     try:
-        with open(problem_path / ".cs50.yaml") as f:
+        config_filepath = lib50_config.get_config_filepath(problem_path)
+        with open(config_filepath) as f:
             try:
                 config = config_loader.load(f.read())
             except InvalidConfigError:
@@ -212,15 +213,19 @@ def connect(slug, config_loader):
         # Parse slug
         slug = Slug(slug)
 
-        # Get .cs50.yaml
+        # Get config file (.cs50.yaml alternatively .yml)
         try:
-            config = config_loader.load(_get_content(slug.org, slug.repo,
-                                              slug.branch, slug.problem / ".cs50.yaml"))
-        except InvalidConfigError:
-            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
+            content = _get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
+        except InvalidSlugError:
+            try:
+                content = _get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
+            except InvalidSlugError:
+                raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 
-        print("WTF!!!!", config)
+         # Load config file
+        config = config_loader.load(content)
 
+        # If there is no config for config_loader.tool, error
         if not config:
             raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 

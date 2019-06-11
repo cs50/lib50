@@ -2,14 +2,35 @@ import collections
 import enum
 
 import yaml
-
-from ._errors import InvalidConfigError
+import os
+import pathlib
+from ._errors import InvalidConfigError, Error
 from . import _
 
 try:
     from yaml import CSafeLoader as SafeLoader
 except ImportError:
     from yaml import SafeLoader
+
+
+def get_config_filepath(path):
+    """
+    Looks for the following files in order at path:
+        - .cs50.yaml
+        - .cs50.yml
+    If either exists,
+        returns path to that file (i.e. <path>/.cs50.yaml or <path>/.cs50.yml)
+    Raises errors.Error otherwise.
+    """
+    path = pathlib.Path(path)
+
+    if (path / ".cs50.yaml").exists():
+        return path / ".cs50.yaml"
+
+    if (path / ".cs50.yml").exists():
+        return path / ".cs50.yml"
+
+    raise Error(_("No config file (.cs50.yaml or .cs50.yml) found at {}".format(path)))
 
 
 class TaggedValue:
