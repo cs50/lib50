@@ -13,31 +13,40 @@ except ImportError:
 
 
 class TaggedValue:
-    """A value tagged in a .yaml file"""
-
-    def __init__(self, value, tag, *tags):
-        """
-        value - the actual value
-        tag - the yaml tag
-        tags - all possible valid tags for this value
-        """
-        tag = tag if tag.startswith("!") else "!" + tag
-
-        tags = list(tags)
-        for i, t in enumerate(tags):
-            tags[i] = t if t.startswith("!") else "!" + t
-            setattr(self, t[1:], False)
-        setattr(self, tag[1:], True)
-
-        self.tag = tag
-        self.tags = set(tags)
+    def __init__(self, value, tag):
         self.value = value
+        self.tag = tag[1:] if tag.startswith("!") else tag
 
     def __repr__(self):
-        return f"TaggedValue(tag={self.tag}, tags={self.tags})"
+        return f"TaggedValue(value={self.value}, tag={self.tag})"
 
 
 class Loader:
+    class _TaggedYamlValue:
+        """A value tagged in a .yaml file"""
+
+        def __init__(self, value, tag, *tags):
+            """
+            value - the actual value
+            tag - the yaml tag
+            tags - all possible valid tags for this value
+            """
+            tag = tag if tag.startswith("!") else "!" + tag
+
+            tags = list(tags)
+            for i, t in enumerate(tags):
+                tags[i] = t if t.startswith("!") else "!" + t
+                setattr(self, t[1:], False)
+            setattr(self, tag[1:], True)
+
+            self.tag = tag
+            self.tags = set(tags)
+            self.value = value
+
+        def __repr__(self):
+            return f"_TaggedYamlValue(tag={self.tag}, tags={self.tags})"
+
+
     def __init__(self, tool, *global_tags, default=None):
         self._global_tags = self._ensure_exclamation(global_tags)
         self._global_default = default if not default or default.startswith("!") else "!" + default
@@ -96,6 +105,7 @@ class Loader:
                     config[key] = self._apply_default(config[key], self._global_default)
 
         self._validate(config)
+        config = self._simplify(config)
 
         return config
 
@@ -103,11 +113,29 @@ class Loader:
         """Create a yaml Loader."""
         class ConfigLoader(SafeLoader):
             pass
-        ConfigLoader.add_multi_constructor("", lambda loader, prefix, node: TaggedValue(node.value, node.tag, *tags))
+        ConfigLoader.add_multi_constructor("", lambda loader, prefix, node: Loader._TaggedYamlValue(node.value, node.tag, *tags))
         return ConfigLoader
 
+    def _simplify(self, config):
+        """Replace all Loader._TaggedYamlValue with TaggedValue (a simpler datastructure)"""
+        if isinstance(config, dict):
+            # Recursively simplify for each item in the config
+            for key, val in config.items():
+                config[key] = self._simplify(val)
+
+        elif isinstance(config, list):
+            # Recursively simplify for each item in the config
+            for i, val in enumerate(config):
+                config[i] = self._simplify(val)
+
+        elif isinstance(config, Loader._TaggedYamlValue):
+            # Replace Loader._TaggedYamlValue with TaggedValue
+            config = TaggedValue(config.value, config.tag)
+
+        return config
+
     def _validate(self, config):
-        """Check whether every TaggedValue has a valid tag, otherwise raise InvalidConfigError"""
+        """Check whether every _TaggedYamlValue has a valid tag, otherwise raise InvalidConfigError"""
         if isinstance(config, dict):
             # Recursively validate each item in the config
             for val in config.values():
@@ -118,7 +146,7 @@ class Loader:
             for item in config:
                 self._validate(item)
 
-        elif isinstance(config, TaggedValue):
+        elif isinstance(config, Loader._TaggedYamlValue):
             tagged_value = config
 
             # if tagged_value is invalid, error
@@ -128,15 +156,15 @@ class Loader:
     def _apply_default(self, config, default):
         """
         Apply default value to every str in config.
-        Also ensure every TaggedValue has default in .tags
+        Also ensure every _TaggedYamlValue has default in .tags
         """
         # No default, nothing to be done here
         if not default:
             return config
 
-        # If the entire config is just a string, return default TaggedValue
+        # If the entire config is just a string, return default _TaggedYamlValue
         if isinstance(config, str):
-            return TaggedValue(config, default, default, *self._global_tags)
+            return Loader._TaggedYamlValue(config, default, default, *self._global_tags)
 
         if isinstance(config, dict):
             # Recursively apply defaults for  each item in the config
@@ -148,8 +176,8 @@ class Loader:
             for i, val in enumerate(config):
                 config[i] = self._apply_default(val, default)
 
-        elif isinstance(config, TaggedValue):
-            # Make sure each TaggedValue knows about the default tag
+        elif isinstance(config, Loader._TaggedYamlValue):
+            # Make sure each _TaggedYamlValue knows about the default tag
             config.tags.add(default)
 
         return config
@@ -166,7 +194,7 @@ class Loader:
             for item in config:
                 self._apply_scope(item, tags)
 
-        elif isinstance(config, TaggedValue):
+        elif isinstance(config, Loader._TaggedYamlValue):
             tagged_value = config
 
             # add all local tags

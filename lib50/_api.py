@@ -144,10 +144,10 @@ def files(patterns,
     include_tags = list(include_tags)
     exclude_tags = list(exclude_tags)
 
-    # Ensure every tag starts with !
+    # Ensure tags do not start with !
     for tags in [require_tags, include_tags, exclude_tags]:
         for i, tag in enumerate(tags):
-            tags[i] = tag if tag.startswith("!") else "!" + tag
+            tags[i] = tag[1:] if tag.startswith("!") else tag
 
     with cd(root):
         # Include everything by default
@@ -157,7 +157,7 @@ def files(patterns,
         if patterns:
             missing_files = []
 
-            # Per line in files
+            # For each pattern
             for pattern in patterns:
                 # Include all files that are tagged with !require
                 if pattern.tag in require_tags:

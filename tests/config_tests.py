@@ -36,9 +36,9 @@ class TestLoader(unittest.TestCase):
             "  bar:\n" \
             "    - !include qux"
         config = lib50.config.Loader("check50", "include").load(content)
-        self.assertTrue(config["foo"][0].include)
+        self.assertEqual(config["foo"][0].tag, "include")
         self.assertEqual(config["foo"][0].value, "baz")
-        self.assertTrue(config["bar"][0].include)
+        self.assertEqual(config["bar"][0].tag, "include")
         self.assertEqual(config["bar"][0].value, "qux")
 
     def test_local_tag(self):
@@ -49,7 +49,7 @@ class TestLoader(unittest.TestCase):
         loader = lib50.config.Loader("check50")
         loader.scope("files", "include")
         config = loader.load(content)
-        self.assertTrue(config["files"][0].include)
+        self.assertEqual(config["files"][0].tag, "include")
         self.assertEqual(config["files"][0].value, "foo")
 
         content = \
@@ -79,7 +79,7 @@ class TestLoader(unittest.TestCase):
         loader = lib50.config.Loader("check50")
         loader.scope("files", default="bar")
         config = loader.load(content)
-        self.assertTrue(config["files"][0].bar)
+        self.assertEqual(config["files"][0].tag, "bar")
         self.assertEqual(config["files"][0].value, "foo")
 
     def test_global_default(self):
@@ -88,7 +88,7 @@ class TestLoader(unittest.TestCase):
             "  files:\n" \
             "    - foo"
         config = lib50.config.Loader("check50", default="bar").load(content)
-        self.assertTrue(config["files"][0].bar)
+        self.assertEqual(config["files"][0].tag, "bar")
         self.assertEqual(config["files"][0].value, "foo")
 
     def test_multiple_defaults(self):
@@ -101,9 +101,9 @@ class TestLoader(unittest.TestCase):
         loader = lib50.config.Loader("check50", default="include")
         loader.scope("bar", default="exclude")
         config = loader.load(content)
-        self.assertTrue(config["foo"][0].include)
+        self.assertEqual(config["foo"][0].tag, "include")
         self.assertEqual(config["foo"][0].value, "baz")
-        self.assertTrue(config["bar"][0].exclude)
+        self.assertEqual(config["bar"][0].tag, "exclude")
         self.assertEqual(config["bar"][0].value, "qux")
 
     def test_same_tag_default(self):
@@ -113,9 +113,9 @@ class TestLoader(unittest.TestCase):
             "    - !include bar\n" \
             "    - baz"
         config = lib50.config.Loader("check50", "include", default="include").load(content)
-        self.assertTrue(config["foo"][0].include)
+        self.assertEqual(config["foo"][0].tag, "include")
         self.assertEqual(config["foo"][0].value, "bar")
-        self.assertTrue(config["foo"][1].include)
+        self.assertEqual(config["foo"][1].tag, "include")
         self.assertEqual(config["foo"][1].value, "baz")
 
 
