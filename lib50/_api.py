@@ -37,9 +37,10 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
+DEFAULT_PUSH_ORG = "me50"
 
 
-def push(tool, slug, config_loader, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
@@ -50,7 +51,7 @@ def push(tool, slug, config_loader, prompt=lambda included, excluded: True):
 
     with authenticate(org) as user, prepare(tool, slug, user, included):
         if prompt(included, excluded):
-            return upload(slug, user, tool)
+            return upload(slug, user, tool, commit_suffix)
         else:
             raise Error(_("No files were submitted."))
 
@@ -221,7 +222,7 @@ def connect(slug, config_loader):
         if not isinstance(config, dict):
             config = {}
 
-        org = config.get("org", config_loader.tool)
+        org = config.get("org", DEFAULT_PUSH_ORG)
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
@@ -299,7 +300,7 @@ def prepare(tool, branch, user, included):
         yield
 
 
-def upload(branch, user, tool):
+def upload(branch, user, tool, commit_suffix=None):
     """
     Commit + push to branch
     Returns username, commit hash
@@ -312,6 +313,9 @@ def upload(branch, user, tool):
         # this to any remote tool via the commit message.
         if language:
             commit_message.append(f"[{language}]")
+
+        if commit_suffix:
+            commit_message.append(commit_suffix)
 
         commit_message = " ".join(commit_message)
 
@@ -558,7 +562,7 @@ def _glob(pattern, skip_dirs=False):
     return {str(Path(f)) for f in all_files}
 
 
-def _get_content(org, repo, branch, filepath):
+def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = requests.get(url)
