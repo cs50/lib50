@@ -27,7 +27,7 @@ import requests
 import termcolor
 import yaml
 
-from . import _, LOCAL_PATH
+from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
@@ -63,7 +63,7 @@ def local(slug, offline=False):
     # Parse slug
     slug = Slug(slug, offline=offline)
 
-    local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
+    local_path = get_local_path() / slug.org / slug.repo
 
     git = Git(f"-C {shlex.quote(str(local_path))}")
     if not local_path.exists():
@@ -435,7 +435,7 @@ class Slug:
     def _get_branches(self):
         """Get branches from org/repo."""
         if self.offline:
-            local_path = Path(LOCAL_PATH).expanduser() / self.org / self.repo
+            local_path = get_local_path() / self.org / self.repo
             get_refs = f"git -C {shlex.quote(str(local_path))} show-ref --heads"
         else:
             get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
