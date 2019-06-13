@@ -68,10 +68,11 @@ class Loader:
             return f"_TaggedYamlValue(tag={self.tag}, tags={self.tags})"
 
 
-    def __init__(self, tool, *global_tags, default=None):
+    def __init__(self, tool, *global_tags, default=None, validate=True):
         self._global_tags = self._ensure_exclamation(global_tags)
         self._global_default = default if not default or default.startswith("!") else "!" + default
         self._scopes = collections.defaultdict(list)
+        self._validate = validate
         self.tool = tool
 
     def scope(self, key, *tags, default=None):
@@ -125,7 +126,9 @@ class Loader:
                 else:
                     config[key] = self._apply_default(config[key], self._global_default)
 
-        self._validate(config)
+        if self._validate:
+            self._validate_tags(config)
+
         config = self._simplify(config)
 
         return config
@@ -155,17 +158,17 @@ class Loader:
 
         return config
 
-    def _validate(self, config):
+    def _validate_tags(self, config):
         """Check whether every _TaggedYamlValue has a valid tag, otherwise raise InvalidConfigError"""
         if isinstance(config, dict):
             # Recursively validate each item in the config
             for val in config.values():
-                self._validate(val)
+                self._validate_tags(val)
 
         elif isinstance(config, list):
             # Recursively validate each item in the config
             for item in config:
-                self._validate(item)
+                self._validate_tags(item)
 
         elif isinstance(config, Loader._TaggedYamlValue):
             tagged_value = config

@@ -31,6 +31,15 @@ class TestLoader(unittest.TestCase):
         config = lib50.config.Loader("check50").load(content)
         self.assertEqual(config, {"dependencies" : ["foo"]})
 
+    def test_no_validation(self):
+        content = \
+            "check50:\n" \
+            "  bar:\n" \
+            "    - !include foo"
+        config = lib50.config.Loader("check50", validate=False).load(content)
+        self.assertEqual(config["bar"][0].tag, "include")
+        self.assertEqual(config["bar"][0].value, "foo")
+
     def test_global_tag(self):
         content = \
             "check50:\n" \
@@ -121,7 +130,26 @@ class TestLoader(unittest.TestCase):
         self.assertEqual(config["foo"][1].tag, "include")
         self.assertEqual(config["foo"][1].value, "baz")
 
+    def test_multiple_tools(self):
+        content = \
+            "check50:\n" \
+            "  files:\n" \
+            "    - !require foo\n" \
+            "lab50:\n" \
+            "  files:\n" \
+            "    - !open bar"
 
+        check50_loader = lib50.config.Loader("check50")
+        check50_loader.scope("files", "require")
+        config = check50_loader.load(content)
+        self.assertEqual(config["files"][0].tag, "require")
+        self.assertEqual(config["files"][0].value, "foo")
+
+        lab50_loader = lib50.config.Loader("lab50")
+        lab50_loader.scope("files", "open")
+        config = lab50_loader.load(content)
+        self.assertEqual(config["files"][0].tag, "open")
+        self.assertEqual(config["files"][0].value, "bar")
 
 
 class TestGetConfigFilepath(unittest.TestCase):

@@ -98,14 +98,14 @@ class TestSlug(unittest.TestCase):
 
     def test_offline(self):
         try:
-            old_local_path = lib50._api.LOCAL_PATH
+            old_local_path = lib50.get_local_path()
             old_wd = os.getcwd()
 
-            lib50._api.LOCAL_PATH = tempfile.TemporaryDirectory().name
-            path = pathlib.Path(lib50._api.LOCAL_PATH) / "foo" / "bar" / "baz"
+            lib50.set_local_path(tempfile.TemporaryDirectory().name)
+            path = pathlib.Path(lib50.get_local_path()) / "foo" / "bar" / "baz"
             os.makedirs(path)
 
-            os.chdir(pathlib.Path(lib50._api.LOCAL_PATH) / "foo" / "bar")
+            os.chdir(pathlib.Path(lib50.get_local_path()) / "foo" / "bar")
             subprocess.check_output(["git", "init"])
 
             os.chdir(path)
@@ -122,7 +122,7 @@ class TestSlug(unittest.TestCase):
             self.assertEqual(slug.branch, "master")
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
-            lib50._api.LOCAL_PATH = old_local_path
+            lib50.set_local_path(old_local_path)
             os.chdir(old_wd)
 
     def test_wrong_slug_offline(self):
