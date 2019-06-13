@@ -352,11 +352,11 @@ def get_local_slugs(tool):
             config_paths.append(Path(root) / ".cs50.yml")
 
     # Filter out all local config files that do not contain tool
-    config_loader = lib50_config.Loader(tool, validate=False)
+    config_loader = lib50_config.Loader(tool)
     valid_paths = []
     for config_path in config_paths:
         with open(config_path) as f:
-            if config_loader.load(f.read()):
+            if config_loader.load(f.read(), validate=False):
                 valid_paths.append(config_path)
 
     # Reconstruct slugs for each config file
