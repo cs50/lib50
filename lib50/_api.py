@@ -31,7 +31,7 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
+__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar", "fetch_config"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -196,23 +196,14 @@ def connect(slug, config_loader):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
-    Returns tool specific portion of .cs50.yaml
+    Returns org, and a tuple of included and excluded files
     """
     with ProgressBar(_("Connecting")):
-        # Parse slug
-        slug = Slug(slug)
-
-        # Get config file (.cs50.yaml alternatively .yml)
-        try:
-            content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
-        except InvalidSlugError:
-            try:
-                content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
-            except InvalidSlugError:
-                raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
+        # Get the config from GitHub at slug
+        config_yaml = fetch_config(slug)
 
          # Load config file
-        config = config_loader.load(content)
+        config = config_loader.load(config_yaml)
 
         # If there is no config for config_loader.tool, error
         if not config:
@@ -325,6 +316,27 @@ def upload(branch, user, tool, commit_suffix=None):
         _run(git.set(Git.cache)(f"push origin {branch}"))
         commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
+
+
+def fetch_config(slug):
+    """
+    Fetch the config file at slug from GitHub.
+    Returns the unparsed json as a string.
+    Raises InvalidSlugError if there is no config file at slug.
+    """
+    # Parse slug
+    slug = Slug(slug)
+
+    # Get config file (.cs50.yaml alternatively .yml)
+    try:
+        content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
+    except InvalidSlugError:
+        try:
+            content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
+        except InvalidSlugError:
+            raise InvalidSlugError(_("Invalid slug. Did you mean something else?"))
+
+    return content
 
 
 def check_dependencies():
