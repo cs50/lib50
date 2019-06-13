@@ -10,6 +10,7 @@ import logging
 import subprocess
 import time
 import termcolor
+import pexpect
 
 import lib50._api
 
@@ -100,8 +101,8 @@ class TestSlug(unittest.TestCase):
         try:
             old_local_path = lib50.get_local_path()
             old_wd = os.getcwd()
-
-            lib50.set_local_path(tempfile.TemporaryDirectory().name)
+            temp_dir = tempfile.TemporaryDirectory()
+            lib50.set_local_path(temp_dir.name)
             path = pathlib.Path(lib50.get_local_path()) / "foo" / "bar" / "baz"
             os.makedirs(path)
 
@@ -123,6 +124,7 @@ class TestSlug(unittest.TestCase):
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
             lib50.set_local_path(old_local_path)
+            temp_dir.cleanup()
             os.chdir(old_wd)
 
     def test_wrong_slug_offline(self):
@@ -227,6 +229,29 @@ class TestPromptPassword(unittest.TestCase):
 
         self.assertEqual(password, "♣€")
         self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
+
+
+class TestGetLocalSlugs(unittest.TestCase):
+    def setUp(self):
+        self.old_path = lib50.get_local_path()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        lib50.set_local_path(self.temp_dir.name)
+        path = lib50.get_local_path() / "foo" / "bar" / "baz"
+        os.makedirs(path)
+        with open(path / ".cs50.yml", "w") as f:
+            f.write("foo50: true\n")
+        pexpect.run(f"git -C {path.parent.parent} init")
+        pexpect.run(f"git -C {path.parent.parent} add .")
+        pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+        lib50.set_local_path(self.old_path)
+
+    def test_one_local_slug(self):
+        slugs = lib50.get_local_slugs("foo50")
+        self.assertEqual(len(slugs), 1)
+        self.assertEqual(slugs[0], "foo/bar/master/baz")
 
 
 if __name__ == '__main__':
