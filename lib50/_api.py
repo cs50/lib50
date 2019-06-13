@@ -421,7 +421,7 @@ class Slug:
         try:
             branches = self._get_branches()
         except TimeoutError:
-            if not args.offline:
+            if not offline:
                 raise ConnectionError("Could not connect to GitHub, it seems you are offline.")
             branches = []
         except Error:
