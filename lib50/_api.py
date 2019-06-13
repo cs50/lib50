@@ -31,7 +31,7 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar", "fetch_config"]
+__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar", "fetch_config", "get_local_slugs"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -338,6 +338,39 @@ def fetch_config(slug):
 
     return content
 
+
+def get_local_slugs(tool):
+    """Get all slugs for tool of lib50 has a local copy."""
+    local_path = get_local_path()
+
+    # Find all local config files within local_path
+    config_paths = []
+    for root, dirs, files in os.walk(local_path):
+        if ".cs50.yaml" in files:
+            config_paths.append(Path(root) / ".cs50.yaml")
+        elif ".cs50.yml" in files:
+            config_paths.append(Path(root) / ".cs50.yml")
+
+    # Filter out all local config files that do not contain tool
+    config_loader = lib50_config.Loader(tool, validate=False)
+    valid_paths = []
+    for config_path in config_paths:
+        with open(config_path) as f:
+            if config_loader.load(f.read()):
+                valid_paths.append(config_path)
+
+    # Reconstruct slugs for each config file
+    slugs = []
+    for path in valid_paths:
+        branch = _run(f"git -C {path.parent} rev-parse --abbrev-ref HEAD")
+        path = path.relative_to(local_path)
+        org = path.parts[0]
+        repo = path.parts[1]
+        problem = "/".join(path.parts[2:-1])
+        slug = "/".join((org, repo, branch, problem))
+        slugs.append(slug)
+
+    return slugs
 
 def check_dependencies():
     """
