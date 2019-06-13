@@ -204,10 +204,10 @@ def connect(slug, config_loader):
 
         # Get config file (.cs50.yaml alternatively .yml)
         try:
-            content = _get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
+            content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
         except InvalidSlugError:
             try:
-                content = _get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
+                content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
             except InvalidSlugError:
                 raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 

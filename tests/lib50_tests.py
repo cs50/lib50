@@ -33,7 +33,7 @@ class TestConnect(unittest.TestCase):
             org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", self.loader)
             self.assertEqual(excluded, set())
 
-            self.assertEqual(org, "check50")
+            self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()

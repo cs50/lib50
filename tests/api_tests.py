@@ -113,7 +113,7 @@ class TestSlug(unittest.TestCase):
             with open(".cs50.yaml", "w") as f:
                 pass
             subprocess.check_output(["git", "add", ".cs50.yaml"])
-            out = subprocess.check_output(["git", "commit", "-m", "qux"])
+            out = subprocess.check_output(["git", "commit", "-m", "\"qux\""])
 
             slug = lib50._api.Slug("foo/bar/master/baz", offline=True)
             self.assertEqual(slug.slug, "foo/bar/master/baz")

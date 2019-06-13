@@ -13,6 +13,7 @@ def get_local_path():
 
 
 def set_local_path(path):
+    global _LOCAL_PATH
     _LOCAL_PATH = _pathlib.Path(path).expanduser().absolute()
 
 
