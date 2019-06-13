@@ -36,7 +36,7 @@ class TestLoader(unittest.TestCase):
             "check50:\n" \
             "  bar:\n" \
             "    - !include foo"
-        config = lib50.config.Loader("check50", validate=False).load(content)
+        config = lib50.config.Loader("check50").load(content, validate=False)
         self.assertEqual(config["bar"][0].tag, "include")
         self.assertEqual(config["bar"][0].value, "foo")
 

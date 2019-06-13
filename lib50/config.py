@@ -68,11 +68,10 @@ class Loader:
             return f"_TaggedYamlValue(tag={self.tag}, tags={self.tags})"
 
 
-    def __init__(self, tool, *global_tags, default=None, validate=True):
+    def __init__(self, tool, *global_tags, default=None):
         self._global_tags = self._ensure_exclamation(global_tags)
         self._global_default = default if not default or default.startswith("!") else "!" + default
         self._scopes = collections.defaultdict(list)
-        self._validate = validate
         self.tool = tool
 
     def scope(self, key, *tags, default=None):
@@ -88,7 +87,7 @@ class Loader:
             scope.append(tags)
             scope.append(default)
 
-    def load(self, content):
+    def load(self, content, validate=True):
         """Parse yaml content."""
         # Try parsing the YAML with global tags
         try:
@@ -126,7 +125,7 @@ class Loader:
                 else:
                     config[key] = self._apply_default(config[key], self._global_default)
 
-        if self._validate:
+        if validate:
             self._validate_tags(config)
 
         config = self._simplify(config)
