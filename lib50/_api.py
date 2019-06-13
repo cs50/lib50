@@ -485,12 +485,22 @@ class Slug:
         """Get branches from org/repo."""
         if self.offline:
             local_path = get_local_path() / self.org / self.repo
-            get_refs = f"git -C {shlex.quote(str(local_path))} show-ref --heads"
+            output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
         else:
-            get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+            cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+            try:
+                with _spawn(cmd, timeout=3) as child:
+                    output = child.read().strip().split("\r\n")
+            except pexpect.TIMEOUT:
+                if "Username for" in child.buffer:
+                    return []
+                else:
+                    raise TimeoutError(3)
+
 
         # Parse get_refs output for the actual branch names
-        return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
+        return (line.split()[1].replace("refs/heads/", "") for line in output)
+
 
 
 
