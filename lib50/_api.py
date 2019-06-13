@@ -341,36 +341,35 @@ def fetch_config(slug):
 
 def get_local_slugs(tool):
     """Get all slugs for tool of lib50 has a local copy."""
+    config_loader = lib50_config.Loader(tool)
     local_path = get_local_path()
 
-    # Find all local config files within local_path
-    config_paths = []
-    for root, dirs, files in os.walk(local_path):
+    return (_path_to_slug(path, local_path) for path in _find_config_paths(local_path)
+                                            if _valid_config_path(path, config_loader))
+
+
+def _find_config_paths(path):
+    # Find all local config files within path
+    for root, dirs, files in os.walk(path):
         if ".cs50.yaml" in files:
-            config_paths.append(Path(root) / ".cs50.yaml")
+            yield Path(root) / ".cs50.yaml"
         elif ".cs50.yml" in files:
-            config_paths.append(Path(root) / ".cs50.yml")
+            yield Path(root) / ".cs50.yml"
 
-    # Filter out all local config files that do not contain tool
-    config_loader = lib50_config.Loader(tool)
-    valid_paths = []
-    for config_path in config_paths:
-        with open(config_path) as f:
-            if config_loader.load(f.read(), validate=False):
-                valid_paths.append(config_path)
 
-    # Reconstruct slugs for each config file
-    slugs = []
-    for path in valid_paths:
-        branch = _run(f"git -C {path.parent} rev-parse --abbrev-ref HEAD")
-        path = path.relative_to(local_path)
-        org = path.parts[0]
-        repo = path.parts[1]
-        problem = "/".join(path.parts[2:-1])
-        slug = "/".join((org, repo, branch, problem))
-        slugs.append(slug)
+def _valid_config_path(path, config_loader):
+    with open(path) as f:
+        return bool(config_loader.load(f.read(), validate=False))
 
-    return slugs
+
+def _path_to_slug(path, local_path):
+    branch = _run(f"git -C {path.parent} rev-parse --abbrev-ref HEAD")
+    path = path.relative_to(local_path)
+    org, repo = path.parts[0:2]
+    problem = "/".join(path.parts[2:-1])
+    slug = "/".join((org, repo, branch, problem))
+    return slug
+
 
 def check_dependencies():
     """
