@@ -37,6 +37,7 @@ def get_config_filepath(path):
 
 
 class TaggedValue:
+    """A value tagged in a .yaml file"""
     def __init__(self, value, tag):
         self.value = value
         self.tag = tag[1:] if tag.startswith("!") else tag
