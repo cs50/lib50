@@ -138,7 +138,7 @@ msgstr "Nombre de usuario de GitHub: "
 #: lib50/_api.py:732
 #, fuzzy
 msgid "GitHub password for {}: "
-msgstr "Contraseña de GitHub: "
+msgstr "Contraseña de GitHub for {}: "
 
 #: lib50/_api.py:737
 #, fuzzy
