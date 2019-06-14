@@ -143,8 +143,9 @@ def files(patterns,
             tags[i] = tag[1:] if tag.startswith("!") else tag
 
     with cd(root):
-        # Include everything by default
-        included = _glob("*")
+        # Include everything but hidden paths by default
+        hidden_paths = _glob("**/.*")
+        included = _glob("*") - hidden_paths
         excluded = set()
 
         if patterns:
@@ -178,9 +179,14 @@ def files(patterns,
             if missing_files:
                 raise MissingFilesError(missing_files)
 
+        # Do not show anything that is hidden as excluded
+        excluded -= hidden_paths
+
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
-        included -= _glob(line)
+        always_excluded = _glob(line)
+        included -= always_excluded
+        excluded -= always_excluded
 
     # Exclude any files that are not valid utf8
     invalid = set()
