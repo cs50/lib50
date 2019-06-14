@@ -2,6 +2,7 @@ import collections
 import contextlib
 import copy
 import datetime
+import fnmatch
 import gettext
 import glob
 import itertools
@@ -668,6 +669,14 @@ def _glob(pattern, skip_dirs=False):
 
     # Normalize all files
     return {str(Path(f)) for f in all_files}
+
+
+def _match_files(universe, pattern):
+    # Implicit recursive iff no / in pattern and starts with *
+    if "/" not in pattern and pattern.startswith("*"):
+        pattern = f"**/{pattern}"
+    pattern = re.compile(fnmatch.translate(pattern))
+    return set(file for file in universe if pattern.match(file))
 
 
 def get_content(org, repo, branch, filepath):
