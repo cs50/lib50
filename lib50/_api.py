@@ -41,6 +41,7 @@ logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
+AUTH_URL = "https://submit.cs50.io/authorize"
 
 
 def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
@@ -262,7 +263,7 @@ def prepare(tool, branch, user, included):
             _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
         except Error:
             raise Error(_("Looks like {} isn't enabled for your account yet. "
-                          "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(tool)))
+                          "Go to {} and make sure you accept any pending invitations!".format(tool, AUTH_URL)))
 
         _run(git("config --bool core.bare false"))
         _run(git(f"config --path core.worktree {area}"))
