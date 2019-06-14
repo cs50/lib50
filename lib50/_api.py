@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import pkg_resources
 import re
-import readline
 import shutil
 import shlex
 import subprocess
@@ -825,17 +824,12 @@ def _authenticate_https(org):
         raise
 
 
-def _prompt_username(prompt="Username: ", prefill=None):
+def _prompt_username(prompt="Username: "):
     """Prompt the user for username."""
-    if prefill:
-        readline.set_startup_hook(lambda: readline.insert_text(prefill))
-
     try:
         return input(prompt).strip()
     except EOFError:
         print()
-    finally:
-        readline.set_startup_hook()
 
 
 def _prompt_password(prompt="Password: "):
