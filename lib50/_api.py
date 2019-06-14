@@ -22,6 +22,7 @@ import time
 import tty
 
 import attr
+import Levenshtein
 import pexpect
 import requests
 import termcolor
@@ -31,8 +32,9 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare",
-           "authenticate", "upload", "logout", "ProgressBar", "fetch_config", "get_local_slugs"]
+__all__ = ["push", "local", "working_area", "files", "connect",
+           "prepare", "authenticate", "upload", "logout", "ProgressBar",
+           "fetch_config", "get_local_slugs"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -340,36 +342,73 @@ def fetch_config(slug):
     return content
 
 
-def get_local_slugs(tool):
-    """Get all slugs for tool of lib50 has a local copy."""
-    config_loader = lib50_config.Loader(tool)
+def get_local_slugs(tool, similar_to=""):
+    """
+    Get all slugs for tool of lib50 has a local copy.
+    If similar_to is given, ranks local slugs by similarity to similar_to.
+    """
+    # Extract org and repo from slug to limit search
+    slug_path = Path(similar_to)
+    entered_org = slug_path.parts[0] if len(slug_path.parts) >= 1 else ""
+    entered_repo = slug_path.parts[1] if len(slug_path.parts) >= 2 else ""
+
+    # Find path of local repo's
     local_path = get_local_path()
+    local_repo = local_path / entered_org / entered_repo
 
-    return (_path_to_slug(path, local_path) for path in _find_config_paths(local_path)
-            if _valid_config_path(path, config_loader))
+    if not local_repo.exists():
+        local_repo = local_path
 
-
-def _find_config_paths(path):
-    # Find all local config files within path
-    for root, dirs, files in os.walk(path):
+    # Find all local config files within local_path
+    config_paths = []
+    for root, dirs, files in os.walk(local_repo):
         if ".cs50.yaml" in files:
-            yield Path(root) / ".cs50.yaml"
+            config_paths.append(Path(root) / ".cs50.yaml")
         elif ".cs50.yml" in files:
-            yield Path(root) / ".cs50.yml"
+            config_paths.append(Path(root) / ".cs50.yml")
+
+    # Filter out all local config files that do not contain tool
+    config_loader = lib50_config.Loader(tool)
+    valid_paths = []
+    for config_path in config_paths:
+        with open(config_path) as f:
+            if config_loader.load(f.read(), validate=False):
+                valid_paths.append(config_path.relative_to(local_path))
+
+    # Find branch for every repo
+    branch_map = {}
+    for path in valid_paths:
+        org, repo = path.parts[0:2]
+        if (org, repo) not in branch_map:
+            branch = _run(f"git -C {local_path / path.parent} rev-parse --abbrev-ref HEAD")
+            branch_map[(org, repo)] = branch
+
+    # Reconstruct slugs for each config file
+    slugs = []
+    for path in valid_paths:
+        org, repo = path.parts[0:2]
+        branch = branch_map[(org, repo)]
+        problem = "/".join(path.parts[2:-1])
+        slugs.append("/".join((org, repo, branch, problem)))
+
+    return _rank_similar_slugs(similar_to, slugs) if similar_to else slugs
 
 
-def _valid_config_path(path, config_loader):
-    with open(path) as f:
-        return bool(config_loader.load(f.read(), validate=False))
+def _rank_similar_slugs(target_slug, other_slugs):
+    """
+    Rank other_slugs by their similarity to target_slug.
+    Returns a list of other_slugs in order (most similar -> least similar).
+    """
+    if len(Path(target_slug).parts) >= 2:
+        other_slugs_filtered = [slug for slug in other_slugs if Path(slug).parts[0:2] == Path(target_slug).parts[0:2]]
+        if other_slugs_filtered:
+            other_slugs = other_slugs_filtered
 
+    scores = {}
+    for other_slug in other_slugs:
+        scores[other_slug] = Levenshtein.jaro_winkler(target_slug, other_slug, 0.01)
 
-def _path_to_slug(path, local_path):
-    branch = _run(f"git -C {path.parent} rev-parse --abbrev-ref HEAD")
-    path = path.relative_to(local_path)
-    org, repo = path.parts[0:2]
-    problem = "/".join(path.parts[2:-1])
-    slug = "/".join((org, repo, branch, problem))
-    return slug
+    return sorted(scores, key=lambda k: scores[k], reverse=True)
 
 
 def check_dependencies():
@@ -745,7 +784,7 @@ def _authenticate_https(org):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
-        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_}'"
         git = Git(Git.cache)
 
         # Get credentials from cache if possible
