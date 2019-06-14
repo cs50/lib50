@@ -31,7 +31,8 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar", "fetch_config", "get_local_slugs"]
+__all__ = ["push", "local", "working_area", "files", "connect", "prepare",
+           "authenticate", "upload", "logout", "ProgressBar", "fetch_config", "get_local_slugs"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -202,7 +203,7 @@ def connect(slug, config_loader):
         # Get the config from GitHub at slug
         config_yaml = fetch_config(slug)
 
-         # Load config file
+        # Load config file
         config = config_loader.load(config_yaml)
 
         # If there is no config for config_loader.tool, error
@@ -345,7 +346,7 @@ def get_local_slugs(tool):
     local_path = get_local_path()
 
     return (_path_to_slug(path, local_path) for path in _find_config_paths(local_path)
-                                            if _valid_config_path(path, config_loader))
+            if _valid_config_path(path, config_loader))
 
 
 def _find_config_paths(path):
@@ -496,12 +497,8 @@ class Slug:
                 else:
                     raise TimeoutError(3)
 
-
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
-
-
-
 
 
 class ProgressBar:
@@ -543,6 +540,7 @@ class ProgressBar:
 
 class _StreamToLogger:
     """Send all that enters the stream to log-function."""
+
     def __init__(self, log):
         self._log = log
 
@@ -672,6 +670,47 @@ def _lfs_add(files, git):
         _run(git("add --force .gitattributes"))
 
 
+def _get_github_id(org, username):
+    """ Get id for username from git config. """
+    # using pexpect.run so that an exception isn't thrown if exit code is nonzero
+    id, exit_code = pexpect.run(f"git config --global {org}.{username}",
+                                withexitstatus=True, env=dict(os.environ), encoding="utf-8")
+    return id if not exit_code else None
+
+
+def _set_github_id(org, username, id):
+    """ Save id for username in git config. """
+    _run(f"git config --global {org}.{username} {id}", quiet=True)
+
+
+def _get_github_user(username=None, password=None):
+    """Query github API for user information"""
+    if username is None:
+        username = _prompt_username(_("GitHub username: "))
+
+    if password is None:
+        password = _prompt_password(_("GitHub password for {}: ").format(username))
+
+    try:
+        res = requests.get("https://api.github.com/user", auth=(username, password))
+    except request.exceptions.RequestException:
+        raise Error(_("Failed to connect to GitHub"))
+
+    # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
+    if "X-GitHub-OTP" in res.headers:
+        raise Error(_("Looks like you have two-factor authentication enabled!"
+                      " Please generate a personal access token and use it as your password."
+                      " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info."))
+
+    if res.status_code != 200:
+        logger.info(res.headers)
+        logger.info(res.text)
+        raise Error(_("Invalid username and/or password.") if res.status_code ==
+                    401 else _("Could not authenticate user."))
+
+    return res.json()
+
+
 def _authenticate_ssh(org):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
     # Try to get username from git config
@@ -691,8 +730,14 @@ def _authenticate_ssh(org):
     else:
         return None
 
+    github_id = _get_github_id(org, username)
+
+    if not github_id:
+        github_id = _get_github_user(username)["id"]
+        _set_github_id(org, username, github_id)
+
     return User(name=username,
-                repo=f"git@github.com:{org}/{username}")
+                repo=f"git@github.com:{org}/{github_id}")
 
 
 @contextlib.contextmanager
@@ -717,29 +762,14 @@ def _authenticate_https(org):
                 child.close()
                 child.exitstatus = 0
 
-        # No credentials found, need to ask user
-        if password is None:
-            username = _prompt_username(_("GitHub username: "))
-            password = _prompt_password(_("GitHub password: "))
-
-        # Check if credentials are correct
-        res = requests.get("https://api.github.com/user", auth=(username, password.encode('utf8')))
-
-        # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
-        if "X-GitHub-OTP" in res.headers:
-            raise Error("Looks like you have two-factor authentication enabled!"
-                        " Please generate a personal access token and use it as your password."
-                        " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
-
-        if res.status_code != 200:
-            logger.info(res.headers)
-            logger.info(res.text)
-            raise Error(_("Invalid username and/or password.") if res.status_code ==
-                        401 else _("Could not authenticate user."))
+        user_info = _get_github_user(username, password)
+        github_id = user_info["id"]
 
         # Canonicalize (capitalization of) username,
         # Especially if user logged in via email address
-        username = res.json()["login"]
+        username = user_info["login"]
+
+        _set_github_id(org, username, github_id)
 
         # Credentials are correct, best cache them
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
@@ -751,7 +781,7 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username}")
+                   repo=f"https://{username}@github.com/{org}/{github_id}")
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.
         logout()
