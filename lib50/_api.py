@@ -784,7 +784,7 @@ def _authenticate_https(org):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
-        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_}'"
+        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
         git = Git(Git.cache)
 
         # Get credentials from cache if possible
