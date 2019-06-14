@@ -145,8 +145,7 @@ def files(patterns,
 
     with cd(root):
         # Include everything but hidden paths by default
-        hidden_paths = _glob("**/.*")
-        included = _glob("*") - hidden_paths
+        included = _glob("*")
         excluded = set()
 
         if patterns:
@@ -179,9 +178,6 @@ def files(patterns,
 
             if missing_files:
                 raise MissingFilesError(missing_files)
-
-        # Do not show anything that is hidden as excluded
-        excluded -= hidden_paths
 
     # Exclude all files that match a pattern from always_exclude
     for line in always_exclude:
