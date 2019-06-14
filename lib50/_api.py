@@ -330,16 +330,27 @@ def fetch_config(slug):
     # Parse slug
     slug = Slug(slug)
 
-    # Get config file (.cs50.yaml alternatively .yml)
+    # Get config file (.cs50.yaml)
     try:
-        content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
+        yaml_content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
     except InvalidSlugError:
-        try:
-            content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
-        except InvalidSlugError:
-            raise InvalidSlugError(_("Invalid slug. Did you mean something else?"))
+        yaml_content = None
 
-    return content
+    # Get config file (.cs50.yml)
+    try:
+        yml_content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
+    except InvalidSlugError:
+        yml_content = None
+
+    # If neither exists, error
+    if not yml_content and not yaml_content:
+        raise InvalidSlugError(_("Invalid slug: {}. Did you mean something else?").format(slug))
+
+    # If both exists, error
+    if yml_content and yaml_content:
+        raise InvalidSlugError(_("Invalid slug: {}. Multiple configurations (both .yaml and .yml) found.").format(slug))
+
+    return yml_content or yaml_content
 
 
 def get_local_slugs(tool, similar_to=""):
@@ -362,10 +373,10 @@ def get_local_slugs(tool, similar_to=""):
     # Find all local config files within local_path
     config_paths = []
     for root, dirs, files in os.walk(local_repo):
-        if ".cs50.yaml" in files:
-            config_paths.append(Path(root) / ".cs50.yaml")
-        elif ".cs50.yml" in files:
-            config_paths.append(Path(root) / ".cs50.yml")
+        try:
+            config_paths.append(lib50_config.get_config_filepath(root))
+        except Error:
+            pass
 
     # Filter out all local config files that do not contain tool
     config_loader = lib50_config.Loader(tool)

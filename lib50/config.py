@@ -24,13 +24,16 @@ def get_config_filepath(path):
     """
     path = pathlib.Path(path)
 
-    if (path / ".cs50.yaml").exists():
-        return path / ".cs50.yaml"
+    yaml_path = path / ".cs50.yaml" if (path / ".cs50.yaml").exists() else None
+    yml_path = path / ".cs50.yml" if (path / ".cs50.yml").exists() else None
 
-    if (path / ".cs50.yml").exists():
-        return path / ".cs50.yml"
+    if yaml_path and yml_path:
+        raise Error(_("Two config files (.cs50.yaml and .cs50.yml) found at {}").format(path))
 
-    raise Error(_("No config file (.cs50.yaml or .cs50.yml) found at {}".format(path)))
+    if not yaml_path and not yml_path:
+        raise Error(_("No config file (.cs50.yaml or .cs50.yml) found at {}".format(path)))
+
+    return yml_path or yaml_path
 
 
 class TaggedValue:

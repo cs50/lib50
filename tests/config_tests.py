@@ -188,16 +188,15 @@ class TestGetConfigFilepath(unittest.TestCase):
 
         self.assertEqual(config_file, pathlib.Path(os.getcwd()) / ".cs50.yaml")
 
-    def test_config_order(self):
+    def test_multiple_configs(self):
         with open(".cs50.yaml", "w"):
             pass
 
         with open(".cs50.yml", "w"):
             pass
 
-        config_file = lib50.config.get_config_filepath(os.getcwd())
-
-        self.assertEqual(config_file, pathlib.Path(os.getcwd()) / ".cs50.yaml")
+        with self.assertRaises(lib50.Error):
+            config_file = lib50.config.get_config_filepath(os.getcwd())
 
 
 if __name__ == '__main__':
