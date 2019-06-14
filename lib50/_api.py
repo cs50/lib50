@@ -507,7 +507,7 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlugError(_("Invalid slug {}".format(slug)))
+            raise InvalidSlugError(_("Invalid slug: {}".format(slug)))
 
     def _check_endings(self):
         """Check begin/end of slug, raises Error if malformed."""
@@ -686,7 +686,7 @@ def _lfs_add(files, git):
     if huges:
         raise Error(_("These files are too large to be submitted:\n{}\n"
                       "Remove these files from your directory "
-                      "and then re-run {}!").format("\n".join(huges), org))
+                      "and then re-run!").format("\n".join(huges), org))
 
     # Add large files (>100MB) with git-lfs
     if larges:

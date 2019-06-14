@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-06-14 12:30-0400\n"
+"POT-Creation-Date: 2019-06-14 12:39-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -43,14 +43,12 @@ msgid "Preparing"
 msgstr "Preparando"
 
 #: lib50/_api.py:266
-#, fuzzy
 msgid ""
 "Looks like {} isn't enabled for your account yet. Go to {} and make sure "
 "you accept any pending invitations!"
 msgstr ""
-"Parece que {} todavia no esta habilitado en tu cuenta. Visita "
-"{} y asegúrate de aceptar las invitaciones "
-"pendientes!"
+"Parece que {} todavia no esta habilitado en tu cuenta. Visita {} y "
+"asegúrate de aceptar las invitaciones pendientes!"
 
 #: lib50/_api.py:303
 msgid "Uploading"
@@ -61,30 +59,26 @@ msgid "automated commit by {}"
 msgstr "confirmación automatizada por {}"
 
 #: lib50/_api.py:341
-#, fuzzy
 msgid "Invalid slug. Did you mean something else?"
-msgstr "El slug no es válido para {}. ¿Quisiste entregar algo más?"
+msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
 
 #: lib50/_api.py:424
-#, fuzzy
 msgid "You don't have git. Install git, then re-run!"
-msgstr "No tienes git. ¡Instala git, y luego vuelve a ejecutar {}!"
+msgstr "No tienes git. ¡Instala git, y luego vuelve a ejecutar!"
 
 #: lib50/_api.py:430
-#, fuzzy
 msgid "You have an old version of git. Install version 2.7 or later, then re-run!"
 msgstr ""
 "Tienes una versión antigua de git. ¡Instala la versión 2.7 o superior, y "
-"vuelve a ejecutar {}!"
+"vuelve a ejecutar!"
 
 #: lib50/_api.py:487
 msgid "Invalid slug"
 msgstr "El slug no es válido"
 
 #: lib50/_api.py:510
-#, fuzzy
-msgid "Invalid slug {}"
-msgstr "El slug no es válido"
+msgid "Invalid slug: {}"
+msgstr "El slug no es válido: {}"
 
 #: lib50/_api.py:516
 msgid "Invalid slug. Did you mean {}, without the leading and trailing slashes?"
@@ -112,14 +106,13 @@ msgstr "No se pudo conectar a GitHub."
 msgid ""
 "These files are too large to be submitted:\n"
 "{}\n"
-"Remove these files from your directory and then re-run {}!"
+"Remove these files from your directory and then re-run!"
 msgstr ""
 "Estos archivos son demasiado grandes para ser entregados:\n"
 "{}\n"
-"¡Quita estos archivos de tu directorio y luego vuelve a ejecutar: {}!"
+"¡Quita estos archivos de tu directorio y luego vuelve a ejecutar!"
 
 #: lib50/_api.py:695
-#, fuzzy
 msgid ""
 "These files are too large to be submitted:\n"
 "{}\n"
@@ -129,21 +122,19 @@ msgstr ""
 "Estos archivos son demasiado grandes para ser entregados:\n"
 "{}\n"
 "Instala git-lfs (o quita estos archivos de tu directorio) y luego vuelve "
-"a ejecutar {}!"
+"a ejecutar!"
 
 #: lib50/_api.py:729
 msgid "GitHub username: "
 msgstr "Nombre de usuario de GitHub: "
 
 #: lib50/_api.py:732
-#, fuzzy
 msgid "GitHub password for {}: "
 msgstr "Contraseña de GitHub for {}: "
 
 #: lib50/_api.py:737
-#, fuzzy
 msgid "Failed to connect to GitHub"
-msgstr "No se pudo conectar a GitHub."
+msgstr "No se pudo conectar a GitHub"
 
 #: lib50/_api.py:741
 msgid ""
@@ -162,7 +153,6 @@ msgid "Could not authenticate user."
 msgstr "No se pudo autenticar usuario."
 
 #: lib50/_errors.py:18
-#, fuzzy
 msgid "You seem to be missing these required files:"
 msgstr "Parece que faltan estos archivos:"
 
@@ -181,3 +171,4 @@ msgstr ""
 #: lib50/config.py:177
 msgid "{} is not a valid tag for {}"
 msgstr ""
+
