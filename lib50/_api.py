@@ -124,8 +124,7 @@ def files(patterns,
           require_tags=("require",),
           include_tags=("include",),
           exclude_tags=("exclude",),
-          root=".",
-          always_exclude=("**/.git*", "**/.lfs*", "**/.ssh*", "**/.c9*", "**/.~c9*")):
+          root="."):
     """
     Takes a list of lib50._config.TaggedValue returns which files should be included and excluded from `root`.
     Any pattern tagged with a tag
@@ -178,12 +177,6 @@ def files(patterns,
 
             if missing_files:
                 raise MissingFilesError(missing_files)
-
-    # Exclude all files that match a pattern from always_exclude
-    for line in always_exclude:
-        always_excluded = _glob(line)
-        included -= always_excluded
-        excluded -= always_excluded
 
     # Exclude any files that are not valid utf8
     invalid = set()
