@@ -263,7 +263,7 @@ def prepare(tool, branch, user, included):
             _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
         except Error:
             raise Error(_("Looks like {} isn't enabled for your account yet. "
-                          "Go to {} and make sure you accept any pending invitations!".format(tool, AUTH_URL)))
+                          "Go to {} and make sure you accept any pending invitations!").format(tool, AUTH_URL))
 
         _run(git("config --bool core.bare false"))
         _run(git(f"config --path core.worktree {area}"))

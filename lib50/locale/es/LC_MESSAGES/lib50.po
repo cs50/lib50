@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-06-14 12:39-0400\n"
+"POT-Creation-Date: 2019-06-14 12:49-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -171,3 +171,4 @@ msgstr "El archivo de configuración no es yaml válido."
 #: lib50/config.py:177
 msgid "{} is not a valid tag for {}"
 msgstr "{} no es una etiqueta válida para {}"
+
