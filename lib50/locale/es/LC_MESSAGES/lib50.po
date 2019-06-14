@@ -158,7 +158,7 @@ msgstr "Parece que faltan estos archivos:"
 
 #: lib50/_errors.py:20
 msgid "You are currently in: {}, did you perhaps intend another directory?"
-msgstr "Estas actualmente en: {}. Tal vez quisiste otro directorio?"
+msgstr "Estás actualmente en: {}. ¿Tal vez quisiste otro directorio?"
 
 #: lib50/config.py:33
 msgid "No config file (.cs50.yaml or .cs50.yml) found at {}"
