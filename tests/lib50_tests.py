@@ -187,20 +187,6 @@ class TestFiles(unittest.TestCase):
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.c"})
 
-    def test_always_exclude(self):
-        content = \
-            "check50:\n" \
-            "  files:\n" \
-            "    - !include foo.py\n"
-
-        config = self.loader.load(content)
-
-        open("foo.py", "w").close()
-
-        included, excluded = lib50.files(config.get("files"), always_exclude=["foo.py"])
-        self.assertEqual(set(included), set())
-        self.assertEqual(set(excluded), set())
-
     def test_exclude_folder_include_file(self):
         content = \
             "check50:\n" \
