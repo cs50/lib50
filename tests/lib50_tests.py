@@ -431,10 +431,11 @@ class TestFiles(unittest.TestCase):
             included, excluded = lib50.files(config.get("files"))
 
     def test_lab50_tags(self):
-        # Three dummy files
+        # Four dummy files
         open("foo.py", "w").close()
         open("bar.py", "w").close()
         open("baz.py", "w").close()
+        open("qux.py", "w").close()
 
         # Dummy config file (.cs50.yml)
         content = \
@@ -442,31 +443,32 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !open \"foo.py\"\n" \
             "    - !include \"bar.py\"\n" \
-            "    - !exclude \"baz.py\"\n"
+            "    - !exclude \"baz.py\"\n" \
+            "    - \"qux.py\"\n"
 
         # Create a config Loader for a tool called lab50
         loader = lib50.config.Loader("lab50")
 
         # Scope the files section of lab50 with the tags: open, include and exclude
-        loader.scope("files", "open", "include", "exclude")
+        loader.scope("files", "open", "include", "exclude", default="include")
 
         # Load the config
         config = loader.load(content)
 
         # Figure out which files have an open tag
-        opened_files = [tagged_value.value for tagged_value in config.get("files") if tagged_value.tag == "open"]
+        opened_files = [tagged_value.value for tagged_value in config["files"] if tagged_value.tag == "open"]
 
         # Have lib50.files figure out which files should be included and excluded
         # Simultaneously ensure all open files exist
-        included, excluded = lib50.files(config.get("files"), require_tags=["open"])
+        included, excluded = lib50.files(config["files"], require_tags=["open"])
 
         # Make sure that files tagged with open are also included
         opened_files = [file for file in opened_files if file in included]
 
         # Assert
-        self.assertEqual(included, {"foo.py", "bar.py"})
+        self.assertEqual(included, {"foo.py", "bar.py", "qux.py"})
         self.assertEqual(excluded, {"baz.py"})
-        self.assertEqual(opened_files, ["foo.py"])
+        self.assertEqual(set(opened_files), {"foo.py"})
 
 
 class TestLocal(unittest.TestCase):
