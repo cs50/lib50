@@ -158,17 +158,16 @@ msgstr "Parece que faltan estos archivos:"
 
 #: lib50/_errors.py:20
 msgid "You are currently in: {}, did you perhaps intend another directory?"
-msgstr ""
+msgstr "Estas actualmente en: {}. Tal vez quisiste otro directorio?"
 
 #: lib50/config.py:33
 msgid "No config file (.cs50.yaml or .cs50.yml) found at {}"
-msgstr ""
+msgstr "No se encontró un archivo de configuración (.cs50.yaml o .cs50.yml) en {}"
 
 #: lib50/config.py:96
 msgid "Config is not valid yaml."
-msgstr ""
+msgstr "El archivo de configuración no es yaml válido."
 
 #: lib50/config.py:177
 msgid "{} is not a valid tag for {}"
-msgstr ""
-
+msgstr "{} no es una etiqueta válida para {}"
