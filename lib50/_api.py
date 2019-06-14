@@ -234,8 +234,8 @@ def authenticate(org):
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org)
         progress_bar.stop()
+        user = _authenticate_ssh(org)
         if user is None:
             # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org) as user:
