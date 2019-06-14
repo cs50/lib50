@@ -124,7 +124,7 @@ def files(patterns,
           include_tags=("include",),
           exclude_tags=("exclude",),
           root=".",
-          always_exclude=("**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*")):
+          always_exclude=("**/.git*", "**/.lfs*", "**/.ssh*", "**/.c9*", "**/.~c9*")):
     """
     Takes a list of lib50._config.TaggedValue returns which files should be included and excluded from `root`.
     Any pattern tagged with a tag
