@@ -22,7 +22,7 @@ import time
 import tty
 
 import attr
-import Levenshtein
+import jellyfish
 import pexpect
 import requests
 import termcolor
@@ -413,7 +413,7 @@ def _rank_similar_slugs(target_slug, other_slugs):
 
     scores = {}
     for other_slug in other_slugs:
-        scores[other_slug] = Levenshtein.jaro_winkler(target_slug, other_slug, 0.01)
+        scores[other_slug] = jellyfish.jaro_winkler(target_slug, other_slug)
 
     return sorted(scores, key=lambda k: scores[k], reverse=True)
 
