@@ -14,7 +14,7 @@ setup(
     },
     license="GPLv3",
     description="This is lib50, CS50's own internal library used in many of its tools.",
-    install_requires=["attrs>=18.1,<20", "pexpect>=4.6,<5", "pyyaml>=5.1,<6", "requests>=2.13,<3", "termcolor>=1.1,<2", "python-Levenshtein>=0.12.0,<1"],
+    install_requires=["attrs>=18.1,<20", "pexpect>=4.6,<5", "pyyaml>=3.10,<6", "requests>=2.13,<3", "termcolor>=1.1,<2", "python-Levenshtein>=0.12.0,<1"],
     keywords=["lib50"],
     name="lib50",
     python_requires=">= 3.6",
