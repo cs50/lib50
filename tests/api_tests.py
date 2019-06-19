@@ -74,23 +74,23 @@ class TestGit(unittest.TestCase):
 class TestSlug(unittest.TestCase):
     def test_wrong_format(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
-            lib50._api.Slug("/cs50/problems2/foo/bar")
+            lib50._api.Slug("/cs50/lib50/tests/bar")
 
         with self.assertRaises(lib50._api.InvalidSlugError):
-            lib50._api.Slug("cs50/problems2/foo/bar/")
+            lib50._api.Slug("cs50/lib50/tests/bar/")
 
         with self.assertRaises(lib50._api.InvalidSlugError):
-            lib50._api.Slug("/cs50/problems2/foo/bar/")
+            lib50._api.Slug("/cs50/lib50/tests/bar/")
 
         with self.assertRaises(lib50._api.InvalidSlugError):
             lib50._api.Slug("cs50/problems2")
 
     def test_online(self):
-        slug = lib50._api.Slug("cs50/problems2/foo/bar")
-        self.assertEqual(slug.slug, "cs50/problems2/foo/bar")
+        slug = lib50._api.Slug("cs50/lib50/tests/bar")
+        self.assertEqual(slug.slug, "cs50/lib50/tests/bar")
         self.assertEqual(slug.org, "cs50")
-        self.assertEqual(slug.repo, "problems2")
-        self.assertEqual(slug.branch, "foo")
+        self.assertEqual(slug.repo, "lib50")
+        self.assertEqual(slug.branch, "tests")
         self.assertEqual(slug.problem, pathlib.Path("bar"))
 
     def test_wrong_slug_online(self):

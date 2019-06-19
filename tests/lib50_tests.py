@@ -30,7 +30,7 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", self.loader)
+            org, (included, excluded) = lib50.connect("cs50/lib50/tests/bar", self.loader)
             self.assertEqual(excluded, set())
 
             self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
@@ -40,7 +40,7 @@ class TestConnect(unittest.TestCase):
         loader = lib50.config.Loader("submit50")
         loader.scope("files", "exclude", "include", "require")
         with contextlib.redirect_stdout(f):
-            include, excluded = lib50.connect("cs50/problems2/foo/bar", loader)
+            include, excluded = lib50.connect("cs50/lib50/tests/bar", loader)
             self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -48,20 +48,20 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/problems2/foo/i_do_not_exist", self.loader)
+                lib50.connect("cs50/lib50/tests/i_do_not_exist", self.loader)
 
     def test_no_tool_in_config(self):
         f = io.StringIO()
         loader = lib50.config.Loader("i_do_not_exist")
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.MissingToolError):
-                lib50.connect("cs50/problems2/foo/bar", loader)
+                lib50.connect("cs50/lib50/tests/bar", loader)
 
     def test_no_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/problems2/foo/no_config", self.loader)
+                lib50.connect("cs50/lib50/tests/no_config", self.loader)
 
 class TestFiles(unittest.TestCase):
     def setUp(self):
@@ -471,13 +471,13 @@ class TestLocal(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_local(self):
-        local_dir = lib50.local("cs50/problems2/foo/bar")
+        local_dir = lib50.local("cs50/lib50/tests/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
         self.assertTrue((local_dir / ".cs50.yaml").is_file())
 
-        local_dir = lib50.local("cs50/problems2/foo/bar")
+        local_dir = lib50.local("cs50/lib50/tests/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -485,7 +485,7 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
-        local_dir = lib50.local("cs50/problems2/foo/bar")
+        local_dir = lib50.local("cs50/lib50/tests/bar")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
