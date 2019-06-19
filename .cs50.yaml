@@ -1,0 +1,8 @@
+check50:
+  dependencies:
+    - requests
+  files: &check50_files
+    - !require foo.py
+
+submit50:
+  files: *check50_files
