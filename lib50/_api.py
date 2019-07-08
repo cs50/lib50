@@ -2,15 +2,15 @@ import collections
 import contextlib
 import copy
 import datetime
+import fnmatch
 import gettext
+import glob
 import itertools
 import logging
 import os
-import glob
 from pathlib import Path
 import pkg_resources
 import re
-import readline
 import shutil
 import shlex
 import subprocess
@@ -22,42 +22,45 @@ import time
 import tty
 
 import attr
+import jellyfish
 import pexpect
 import requests
 import termcolor
 import yaml
 
-from . import _
-from .errors import *
+from . import _, get_local_path
+from ._errors import *
 from . import config as lib50_config
 
-__all__ = ["push", "local", "working_area", "files", "connect", "prepare", "authenticate", "upload", "logout", "ProgressBar"]
+__all__ = ["push", "local", "working_area", "files", "connect",
+           "prepare", "authenticate", "upload", "logout", "ProgressBar",
+           "fetch_config", "get_local_slugs"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-LOCAL_PATH = "~/.local/share/lib50"
-
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
+DEFAULT_PUSH_ORG = "me50"
+AUTH_URL = "https://submit.cs50.io/authorize"
 
 
-def push(tool, slug, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
     check_dependencies()
 
-    org, (included, excluded) = connect(slug, tool)
+    org, (included, excluded) = connect(slug, config_loader)
 
     with authenticate(org) as user, prepare(tool, slug, user, included):
         if prompt(included, excluded):
-            return upload(slug, user, tool)
+            return upload(slug, user, tool, commit_suffix)
         else:
             raise Error(_("No files were submitted."))
 
 
-def local(slug, tool, offline=False):
+def local(slug, offline=False):
     """
     Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
@@ -65,7 +68,7 @@ def local(slug, tool, offline=False):
     # Parse slug
     slug = Slug(slug, offline=offline)
 
-    local_path = Path(LOCAL_PATH).expanduser() / slug.org / slug.repo
+    local_path = get_local_path() / slug.org / slug.repo
 
     git = Git(f"-C {shlex.quote(str(local_path))}")
     if not local_path.exists():
@@ -73,26 +76,17 @@ def local(slug, tool, offline=False):
         _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
 
     if not offline:
+        # Get latest version of checks
         _run(git(f"fetch origin {slug.branch}"))
 
-    _run(git(f"checkout -B {slug.branch} origin/{slug.branch}"))
+    # Ensure that local copy of the repo is identical to remote copy
+    _run(git(f"checkout -f -B {slug.branch} origin/{slug.branch}"))
     _run(git(f"reset --hard HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
     if not problem_path.exists():
         raise InvalidSlugError(_("{} does not exist at {}/{}").format(slug.problem, slug.org, slug.repo))
-
-    # Get config
-    try:
-        with open(problem_path / ".cs50.yaml") as f:
-            try:
-                config = lib50_config.load(f.read(), tool)
-            except InvalidConfigError:
-                raise InvalidSlugError(
-                    _("Invalid slug for {}. Did you mean something else?").format(tool))
-    except FileNotFoundError:
-        raise InvalidSlugError(_("Invalid slug. Did you mean something else?"))
 
     return problem_path
 
@@ -117,6 +111,7 @@ def working_area(files, name=""):
 
 @contextlib.contextmanager
 def cd(dest):
+    """ Temporarily cd into a directory"""
     origin = os.getcwd()
     try:
         os.chdir(dest)
@@ -125,23 +120,41 @@ def cd(dest):
         os.chdir(origin)
 
 
-def files(patterns, root=".", always_exclude=["**/.git*", "**/.lfs*", "**/.c9*", "**/.~c9*"]):
+def files(patterns,
+          require_tags=("require",),
+          include_tags=("include",),
+          exclude_tags=("exclude",),
+          root="."):
     """
-    Takes a list of lib50.config.FilePatterns returns which files should be included and excluded from cwd.
+    Takes a list of lib50._config.TaggedValue returns which files should be included and excluded from `root`.
+    Any pattern tagged with a tag
+        from include_tags will be included
+        from require_tags can only be a file, that will then be included. MissingFilesError is raised if missing
+        from exclude_tags will be excluded
+    Any pattern in always_exclude will always be excluded.
     """
+    require_tags = list(require_tags)
+    include_tags = list(include_tags)
+    exclude_tags = list(exclude_tags)
+
+    # Ensure tags do not start with !
+    for tags in [require_tags, include_tags, exclude_tags]:
+        for i, tag in enumerate(tags):
+            tags[i] = tag[1:] if tag.startswith("!") else tag
+
     with cd(root):
-        # Include everything by default
+        # Include everything but hidden paths by default
         included = _glob("*")
         excluded = set()
 
         if patterns:
             missing_files = []
 
-            # Per line in files
-            for item in patterns:
+            # For each pattern
+            for pattern in patterns:
                 # Include all files that are tagged with !require
-                if item.type is lib50_config.PatternType.Required:
-                    file = str(Path(item.pattern))
+                if pattern.tag in require_tags:
+                    file = str(Path(pattern.value))
                     if not Path(file).exists():
                         missing_files.append(file)
                     else:
@@ -152,22 +165,18 @@ def files(patterns, root=".", always_exclude=["**/.git*", "**/.lfs*", "**/.c9*",
                         else:
                             included.add(file)
                 # Include all files that are tagged with !include
-                elif item.type is lib50_config.PatternType.Included:
-                    new_included = _glob(item.pattern)
+                elif pattern.tag in include_tags:
+                    new_included = _glob(pattern.value)
                     excluded -= new_included
                     included.update(new_included)
                 # Exclude all files that are tagged with !exclude
-                else:
-                    new_excluded = _glob(item.pattern)
+                elif pattern.tag in exclude_tags:
+                    new_excluded = _glob(pattern.value)
                     included -= new_excluded
                     excluded.update(new_excluded)
 
             if missing_files:
                 raise MissingFilesError(missing_files)
-
-    # Exclude all files that match a pattern from always_exclude
-    for line in always_exclude:
-        included -= _glob(line)
 
     # Exclude any files that are not valid utf8
     invalid = set()
@@ -182,31 +191,28 @@ def files(patterns, root=".", always_exclude=["**/.git*", "**/.lfs*", "**/.c9*",
     return included, excluded
 
 
-def connect(slug, tool):
+def connect(slug, config_loader):
     """
     Ensure .cs50.yaml and tool key exists, raises Error otherwise
     Check that all required files as per .cs50.yaml are present
-    Returns tool specific portion of .cs50.yaml
+    Returns org, and a tuple of included and excluded files
     """
     with ProgressBar(_("Connecting")):
-        # Parse slug
-        slug = Slug(slug)
+        # Get the config from GitHub at slug
+        config_yaml = fetch_config(slug)
 
-        # Get .cs50.yaml
-        try:
-            config = lib50_config.load(_get_content(slug.org, slug.repo,
-                                                 slug.branch, slug.problem / ".cs50.yaml"), tool)
-        except InvalidConfigError:
-            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
+        # Load config file
+        config = config_loader.load(config_yaml)
 
+        # If there is no config for config_loader.tool, error
         if not config:
-            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(tool))
+            raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 
         # If config of tool is just a truthy value, config should be empty
         if not isinstance(config, dict):
             config = {}
 
-        org = config.get("org", tool)
+        org = config.get("org", DEFAULT_PUSH_ORG)
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
@@ -224,9 +230,10 @@ def authenticate(org):
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org)
         progress_bar.stop()
+        user = _authenticate_ssh(org)
         if user is None:
+            # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org) as user:
                 yield user
         else:
@@ -251,7 +258,7 @@ def prepare(tool, branch, user, included):
             _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
         except Error:
             raise Error(_("Looks like {} isn't enabled for your account yet. "
-                          "Go to https://cs50.me/authorize and make sure you accept any pending invitations!".format(tool)))
+                          "Go to {} and make sure you accept any pending invitations!").format(tool, AUTH_URL))
 
         _run(git("config --bool core.bare false"))
         _run(git(f"config --path core.worktree {area}"))
@@ -283,14 +290,24 @@ def prepare(tool, branch, user, included):
         yield
 
 
-def upload(branch, user, tool):
+def upload(branch, user, tool, commit_suffix=None):
     """
     Commit + push to branch
     Returns username, commit hash
     """
     with ProgressBar(_("Uploading")):
         language = os.environ.get("LANGUAGE")
-        commit_message = _("automated commit by {}{}").format(tool, f" [{language}]" if language else "")
+        commit_message = [_("automated commit by {}").format(tool)]
+
+        # If LANGUAGE environment variable is set, we need to communicate
+        # this to any remote tool via the commit message.
+        if language:
+            commit_message.append(f"[{language}]")
+
+        if commit_suffix:
+            commit_message.append(commit_suffix)
+
+        commit_message = " ".join(commit_message)
 
         # Commit + push
         git = Git(Git.working_area)
@@ -298,6 +315,107 @@ def upload(branch, user, tool):
         _run(git.set(Git.cache)(f"push origin {branch}"))
         commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
+
+
+def fetch_config(slug):
+    """
+    Fetch the config file at slug from GitHub.
+    Returns the unparsed json as a string.
+    Raises InvalidSlugError if there is no config file at slug.
+    """
+    # Parse slug
+    slug = Slug(slug)
+
+    # Get config file (.cs50.yaml)
+    try:
+        yaml_content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yaml")
+    except InvalidSlugError:
+        yaml_content = None
+
+    # Get config file (.cs50.yml)
+    try:
+        yml_content = get_content(slug.org, slug.repo, slug.branch, slug.problem / ".cs50.yml")
+    except InvalidSlugError:
+        yml_content = None
+
+    # If neither exists, error
+    if not yml_content and not yaml_content:
+        raise InvalidSlugError(_("Invalid slug: {}. Did you mean something else?").format(slug))
+
+    # If both exists, error
+    if yml_content and yaml_content:
+        raise InvalidSlugError(_("Invalid slug: {}. Multiple configurations (both .yaml and .yml) found.").format(slug))
+
+    return yml_content or yaml_content
+
+
+def get_local_slugs(tool, similar_to=""):
+    """
+    Get all slugs for tool of lib50 has a local copy.
+    If similar_to is given, ranks local slugs by similarity to similar_to.
+    """
+    # Extract org and repo from slug to limit search
+    slug_path = Path(similar_to)
+    entered_org = slug_path.parts[0] if len(slug_path.parts) >= 1 else ""
+    entered_repo = slug_path.parts[1] if len(slug_path.parts) >= 2 else ""
+
+    # Find path of local repo's
+    local_path = get_local_path()
+    local_repo = local_path / entered_org / entered_repo
+
+    if not local_repo.exists():
+        local_repo = local_path
+
+    # Find all local config files within local_path
+    config_paths = []
+    for root, dirs, files in os.walk(local_repo):
+        try:
+            config_paths.append(lib50_config.get_config_filepath(root))
+        except Error:
+            pass
+
+    # Filter out all local config files that do not contain tool
+    config_loader = lib50_config.Loader(tool)
+    valid_paths = []
+    for config_path in config_paths:
+        with open(config_path) as f:
+            if config_loader.load(f.read(), validate=False):
+                valid_paths.append(config_path.relative_to(local_path))
+
+    # Find branch for every repo
+    branch_map = {}
+    for path in valid_paths:
+        org, repo = path.parts[0:2]
+        if (org, repo) not in branch_map:
+            branch = _run(f"git -C {local_path / path.parent} rev-parse --abbrev-ref HEAD")
+            branch_map[(org, repo)] = branch
+
+    # Reconstruct slugs for each config file
+    slugs = []
+    for path in valid_paths:
+        org, repo = path.parts[0:2]
+        branch = branch_map[(org, repo)]
+        problem = "/".join(path.parts[2:-1])
+        slugs.append("/".join((org, repo, branch, problem)))
+
+    return _rank_similar_slugs(similar_to, slugs) if similar_to else slugs
+
+
+def _rank_similar_slugs(target_slug, other_slugs):
+    """
+    Rank other_slugs by their similarity to target_slug.
+    Returns a list of other_slugs in order (most similar -> least similar).
+    """
+    if len(Path(target_slug).parts) >= 2:
+        other_slugs_filtered = [slug for slug in other_slugs if Path(slug).parts[0:2] == Path(target_slug).parts[0:2]]
+        if other_slugs_filtered:
+            other_slugs = other_slugs_filtered
+
+    scores = {}
+    for other_slug in other_slugs:
+        scores[other_slug] = jellyfish.jaro_winkler(target_slug, other_slug)
+
+    return sorted(scores, key=lambda k: scores[k], reverse=True)
 
 
 def check_dependencies():
@@ -378,14 +496,24 @@ class Slug:
         remainder = slug[idx + 1:]
         self.org, self.repo = slug.split("/")[:2]
 
+        # Gather all branches
+        try:
+            branches = self._get_branches()
+        except TimeoutError:
+            if not offline:
+                raise ConnectionError("Could not connect to GitHub, it seems you are offline.")
+            branches = []
+        except Error:
+            branches = []
+
         # Find a matching branch
-        for branch in self._get_branches():
+        for branch in branches:
             if remainder.startswith(f"{branch}"):
                 self.branch = branch
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlugError(_("Invalid slug {}".format(slug)))
+            raise InvalidSlugError(_("Invalid slug: {}".format(slug)))
 
     def _check_endings(self):
         """Check begin/end of slug, raises Error if malformed."""
@@ -402,14 +530,21 @@ class Slug:
     def _get_branches(self):
         """Get branches from org/repo."""
         if self.offline:
-            local_path = Path(LOCAL_PATH).expanduser() / self.org / self.repo
-            get_refs = f"git -C {shlex.quote(str(local_path))} show-ref --heads"
+            local_path = get_local_path() / self.org / self.repo
+            output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
         else:
-            get_refs = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
-        try:
-            return (line.split()[1].replace("refs/heads/", "") for line in _run(get_refs, timeout=3).split("\n"))
-        except Error:
-            return []
+            cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+            try:
+                with _spawn(cmd, timeout=3) as child:
+                    output = child.read().strip().split("\r\n")
+            except pexpect.TIMEOUT:
+                if "Username for" in child.buffer:
+                    return []
+                else:
+                    raise TimeoutError(3)
+
+        # Parse get_refs output for the actual branch names
+        return (line.split()[1].replace("refs/heads/", "") for line in output)
 
 
 class ProgressBar:
@@ -451,6 +586,7 @@ class ProgressBar:
 
 class _StreamToLogger:
     """Send all that enters the stream to log-function."""
+
     def __init__(self, log):
         self._log = log
 
@@ -474,9 +610,10 @@ def _spawn(command, quiet=False, timeout=None):
 
     try:
         if not quiet:
+            # Log command output to logger
             child.logfile_read = _StreamToLogger(logger.debug)
         yield child
-    except:
+    except BaseException:
         child.close()
         raise
     else:
@@ -498,7 +635,7 @@ def _run(command, quiet=False, timeout=None):
             command_output = child.read().strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
-        raise Error()
+        raise TimeoutError(timeout)
 
     return command_output
 
@@ -523,7 +660,15 @@ def _glob(pattern, skip_dirs=False):
     return {str(Path(f)) for f in all_files}
 
 
-def _get_content(org, repo, branch, filepath):
+def _match_files(universe, pattern):
+    # Implicit recursive iff no / in pattern and starts with *
+    if "/" not in pattern and pattern.startswith("*"):
+        pattern = f"**/{pattern}"
+    pattern = re.compile(fnmatch.translate(pattern))
+    return set(file for file in universe if pattern.match(file))
+
+
+def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = requests.get(url)
@@ -555,7 +700,7 @@ def _lfs_add(files, git):
     if huges:
         raise Error(_("These files are too large to be submitted:\n{}\n"
                       "Remove these files from your directory "
-                      "and then re-run {}!").format("\n".join(huges), org))
+                      "and then re-run!").format("\n".join(huges), org))
 
     # Add large files (>100MB) with git-lfs
     if larges:
@@ -579,18 +724,76 @@ def _lfs_add(files, git):
         _run(git("add --force .gitattributes"))
 
 
+def _get_github_id(org, username):
+    """ Get id for username from git config. """
+    # using pexpect.run so that an exception isn't thrown if exit code is nonzero
+    id, exit_code = pexpect.run(f"git config --global {org}.{username}",
+                                withexitstatus=True, env=dict(os.environ), encoding="utf-8")
+    return id if not exit_code else None
+
+
+def _set_github_id(org, username, id):
+    """ Save id for username in git config. """
+    _run(f"git config --global {org}.{username} {id}", quiet=True)
+
+
+def _get_github_user(username=None, password=None):
+    """Query github API for user information. Returns queried credentials as well as user info."""
+    if username is None:
+        username = _prompt_username(_("GitHub username: "))
+
+    if password is None:
+        password = _prompt_password(_("GitHub password for {}: ").format(username))
+
+    try:
+        res = requests.get("https://api.github.com/user", auth=(username, password))
+    except request.exceptions.RequestException:
+        raise Error(_("Failed to connect to GitHub"))
+
+    # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
+    if "X-GitHub-OTP" in res.headers:
+        raise Error(_("Looks like you have two-factor authentication enabled!"
+                      " Please generate a personal access token and use it as your password."
+                      " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info."))
+
+    if res.status_code != 200:
+        logger.info(res.headers)
+        logger.info(res.text)
+        raise Error(_("Invalid username and/or password.") if res.status_code ==
+                    401 else _("Could not authenticate user."))
+
+    user_info = res.json()
+
+    # Normalize capitalization of username
+    username = user_info["login"]
+
+    return (username, password), user_info
+
+
 def _authenticate_ssh(org):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
     # Require ssh-agent
     child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
-    i = child.expect(["Hi (.+)! You've successfully authenticated", "Enter passphrase for key",
-                      "Permission denied", "Are you sure you want to continue connecting"])
+    i = child.expect(["Hi (.+)! You've successfully authenticated",
+                      "Enter passphrase for key",
+                      "Permission denied",
+                      "Are you sure you want to continue connecting"])
     child.close()
+
     if i == 0:
         username = child.match.groups()[0]
-        return User(name=username,
-                    repo=f"git@github.com:{org}/{username}")
+    else:
+        return None
+
+    github_id = _get_github_id(org, username)
+
+    if not github_id:
+        github_id = _get_github_user(username)[1]["id"]
+        _set_github_id(org, username, github_id)
+
+    return User(name=username,
+                repo=f"git@github.com:{org}/{github_id}")
 
 
 @contextlib.contextmanager
@@ -601,6 +804,7 @@ def _authenticate_https(org):
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
         git = Git(Git.cache)
 
+        # Get credentials from cache if possible
         with _spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
@@ -614,28 +818,12 @@ def _authenticate_https(org):
                 child.close()
                 child.exitstatus = 0
 
-        if password is None:
-            username = _prompt_username(_("GitHub username: "))
-            password = _prompt_password(_("GitHub password: "))
+        (username, password), user_info = _get_github_user(username, password)
+        github_id = user_info["id"]
 
-        res = requests.get("https://api.github.com/user", auth=(username, password))
+        _set_github_id(org, username, github_id)
 
-        # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
-        if "X-GitHub-OTP" in res.headers:
-            raise Error("Looks like you have two-factor authentication enabled!"
-                        " Please generate a personal access token and use it as your password."
-                        " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
-
-        if res.status_code != 200:
-            logger.info(res.headers)
-            logger.info(res.text)
-            raise Error(_("Invalid username and/or password.") if res.status_code ==
-                        401 else _("Could not authenticate user."))
-
-        # Canonicalize (capitalization of) username,
-        # Especially if user logged in via email address
-        username = res.json()["login"]
-
+        # Credentials are correct, best cache them
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
@@ -645,53 +833,70 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username}")
-    except:
+                   repo=f"https://{username}@github.com/{org}/{github_id}")
+    except BaseException:
+        # Some error occured while this context manager is active, best forget credentials.
         logout()
         raise
 
 
-def _prompt_username(prompt="Username: ", prefill=None):
+def _prompt_username(prompt="Username: "):
     """Prompt the user for username."""
-    if prefill:
-        readline.set_startup_hook(lambda: readline.insert_text(prefill))
-
     try:
         return input(prompt).strip()
     except EOFError:
         print()
-    finally:
-        readline.set_startup_hook()
 
 
 def _prompt_password(prompt="Password: "):
-    """Prompt the user for password."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-
+    """Prompt the user for password, printing asterisks for each character"""
     print(prompt, end="", flush=True)
-    password = []
-    try:
+    password_bytes = []
+    password_string = ""
+
+    with _no_echo_stdin():
         while True:
+            # Read one byte
             ch = sys.stdin.buffer.read(1)[0]
-            if ch in (ord("\r"), ord("\n"), 4):  # If user presses Enter or ctrl-d
+            # If user presses Enter or ctrl-d
+            if ch in (ord("\r"), ord("\n"), 4):
                 print("\r")
                 break
-            elif ch == 127:  # DEL
-                try:
-                    password.pop()
-                except IndexError:
-                    pass
-                else:
+            # Del
+            elif ch == 127:
+                if len(password_string) > 0:
                     print("\b \b", end="", flush=True)
-            elif ch == 3:  # ctrl-c
+                # Remove last char and its corresponding bytes
+                password_string = password_string[:-1]
+                password_bytes = list(password_string.encode("utf8"))
+            # Ctrl-c
+            elif ch == 3:
                 print("^C", end="", flush=True)
                 raise KeyboardInterrupt
             else:
-                password.append(ch)
-                print("*", end="", flush=True)
+                password_bytes.append(ch)
+
+                # If byte added concludes a utf8 char, print *
+                try:
+                    password_string = bytes(password_bytes).decode("utf8")
+                except UnicodeDecodeError:
+                    pass
+                else:
+                    print("*", end="", flush=True)
+
+    return password_string
+
+
+@contextlib.contextmanager
+def _no_echo_stdin():
+    """
+    On Unix only, have stdin not echo input.
+    https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    try:
+        yield
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    return bytes(password).decode()
