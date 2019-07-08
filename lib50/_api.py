@@ -738,7 +738,7 @@ def _set_github_id(org, username, id):
 
 
 def _get_github_user(username=None, password=None):
-    """Query github API for user information"""
+    """Query github API for user information. Returns queried credentials as well as user info."""
     if username is None:
         username = _prompt_username(_("GitHub username: "))
 
@@ -762,7 +762,12 @@ def _get_github_user(username=None, password=None):
         raise Error(_("Invalid username and/or password.") if res.status_code ==
                     401 else _("Could not authenticate user."))
 
-    return res.json()
+    user_info = res.json()
+
+    # Normalize capitalization of username
+    username = user_info["login"]
+
+    return (username, password), user_info
 
 
 def _authenticate_ssh(org):
@@ -784,7 +789,7 @@ def _authenticate_ssh(org):
     github_id = _get_github_id(org, username)
 
     if not github_id:
-        github_id = _get_github_user(username)["id"]
+        github_id = _get_github_user(username)[1]["id"]
         _set_github_id(org, username, github_id)
 
     return User(name=username,
@@ -813,12 +818,8 @@ def _authenticate_https(org):
                 child.close()
                 child.exitstatus = 0
 
-        user_info = _get_github_user(username, password)
+        (username, password), user_info = _get_github_user(username, password)
         github_id = user_info["id"]
-
-        # Canonicalize (capitalization of) username,
-        # Especially if user logged in via email address
-        username = user_info["login"]
 
         _set_github_id(org, username, github_id)
 
