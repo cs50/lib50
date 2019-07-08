@@ -15,9 +15,6 @@ import lib50.config
 
 class TestConnect(unittest.TestCase):
     def setUp(self):
-        self.loader = lib50.config.Loader("check50")
-        self.loader.scope("files", "exclude", "include", "require")
-
         self.working_directory = tempfile.TemporaryDirectory()
         self._wd = os.getcwd()
         os.chdir(self.working_directory.name)
@@ -30,17 +27,14 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            org, (included, excluded) = lib50.connect("cs50/lib50/tests/bar", self.loader)
+            org, (included, excluded) = lib50.connect("cs50/problems2/foo/bar", "check50")
             self.assertEqual(excluded, set())
-
-            self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
+            self.assertEqual(org, "check50")
         self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
-        loader = lib50.config.Loader("submit50")
-        loader.scope("files", "exclude", "include", "require")
         with contextlib.redirect_stdout(f):
-            include, excluded = lib50.connect("cs50/lib50/tests/bar", loader)
+            include, excluded = lib50.connect("cs50/problems2/foo/bar", "submit50")
             self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
@@ -48,26 +42,22 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/lib50/tests/i_do_not_exist", self.loader)
+                lib50.connect("cs50/problems2/foo/i_do_not_exist", "check50")
 
     def test_no_tool_in_config(self):
         f = io.StringIO()
-        loader = lib50.config.Loader("i_do_not_exist")
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(lib50.MissingToolError):
-                lib50.connect("cs50/lib50/tests/bar", loader)
+            with self.assertRaises(lib50.InvalidSlugError):
+                lib50.connect("cs50/problems2/foo/bar", "i_do_not_exist")
 
     def test_no_config(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             with self.assertRaises(lib50.InvalidSlugError):
-                lib50.connect("cs50/lib50/tests/no_config", self.loader)
+                lib50.connect("cs50/problems2/foo/no_config", "check50")
 
 class TestFiles(unittest.TestCase):
     def setUp(self):
-        self.loader = lib50.config.Loader("check50")
-        self.loader.scope("files", "include", "exclude", "require")
-
         self.working_directory = tempfile.TemporaryDirectory()
         self._wd = os.getcwd()
         os.chdir(self.working_directory.name)
@@ -82,7 +72,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude foo.py\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
         open("bar.py", "w").close()
@@ -97,7 +87,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         included, excluded = lib50.files(config.get("files"))
         self.assertEqual(included, set())
@@ -116,7 +106,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !include foo.py\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
         open("bar.py", "w").close()
@@ -140,7 +130,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !include \"*\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo.py", "bar.c"})
@@ -152,7 +142,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !require foo.py\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
 
@@ -173,7 +163,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !require foo.py\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         open("foo.py", "w").close()
 
@@ -187,6 +177,20 @@ class TestFiles(unittest.TestCase):
         self.assertEqual(set(included), {"foo.py"})
         self.assertEqual(set(excluded), {"bar.c"})
 
+    def test_always_exclude(self):
+        content = \
+            "check50:\n" \
+            "  files:\n" \
+            "    - !include foo.py\n"
+
+        config = lib50.config.load(content, "check50")
+
+        open("foo.py", "w").close()
+
+        included, excluded = lib50.files(config.get("files"), always_exclude=["foo.py"])
+        self.assertEqual(set(included), set())
+        self.assertEqual(set(excluded), set())
+
     def test_exclude_folder_include_file(self):
         content = \
             "check50:\n" \
@@ -194,7 +198,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude foo\n" \
             "    - !include foo/bar\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar", "w").close()
@@ -210,7 +214,7 @@ class TestFiles(unittest.TestCase):
             "    - !include foo/bar.py\n" \
             "    - !exclude foo\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
@@ -226,7 +230,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*.py\"\n" \
             "    - !include foo\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
@@ -242,7 +246,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*.py\"\n" \
             "    - !include \"foo/*\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
@@ -258,7 +262,7 @@ class TestFiles(unittest.TestCase):
             "    - !exclude \"*\"\n" \
             "    - !include foo\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         open("foo/bar.py", "w").close()
@@ -277,7 +281,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*.py\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), set())
@@ -288,7 +292,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"./*.py\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         included, excluded = lib50.files(config.get("files"))
         self.assertEqual(set(included), {"foo/bar.py"})
@@ -300,7 +304,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"*/*.py\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         os.mkdir("foo/bar")
@@ -317,7 +321,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !exclude \"foo/**/*.py\"\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         os.mkdir("foo")
         os.mkdir("foo/bar")
@@ -335,7 +339,7 @@ class TestFiles(unittest.TestCase):
             "  files:\n" \
             "    - !require does_not_exist.py\n"
 
-        config = self.loader.load(content)
+        config = lib50.config.load(content, "check50")
 
         with self.assertRaises(lib50.MissingFilesError):
             lib50.files(config.get("files"))
@@ -361,107 +365,8 @@ class TestFiles(unittest.TestCase):
         self.assertEqual(included, {"bar/baz/qux.py", "hello.py"})
         self.assertEqual(excluded, set())
 
-    def test_no_tags(self):
-        open("foo.py", "w").close()
-        open("bar.py", "w").close()
-        open("baz.py", "w").close()
-
-        content = \
-            "check50:\n" \
-            "  files:\n" \
-            "    - !include \"foo.py\"\n" \
-            "    - !exclude \"bar.py\"\n" \
-            "    - !require \"baz.py\"\n"
-        config = self.loader.load(content)
-
-        included, excluded = lib50.files(config.get("files"), exclude_tags=[], include_tags=[], require_tags=[])
-
-        self.assertEqual(included, {"foo.py", "bar.py", "baz.py"})
-        self.assertEqual(excluded, set())
-
-    def test_custom_tags(self):
-        open("foo.py", "w").close()
-        open("bar.py", "w").close()
-        open("baz.py", "w").close()
-
-        content = \
-            "foo50:\n" \
-            "  files:\n" \
-            "    - !open \"foo.py\"\n" \
-            "    - !close \"bar.py\"\n" \
-            "    - !exclude \"baz.py\"\n"
-
-        loader = lib50.config.Loader("foo50")
-        loader.scope("files", "open", "close", "exclude")
-        config = loader.load(content)
-
-        included, excluded = lib50.files(config.get("files"),
-                                         exclude_tags=["exclude"],
-                                         include_tags=[""],
-                                         require_tags=["open", "close"])
-
-        self.assertEqual(included, {"foo.py", "bar.py"})
-        self.assertEqual(excluded, {"baz.py"})
-
-    def test_non_file_require(self):
-        open("foo.py", "w").close()
-
-        content = \
-            "check50:\n" \
-            "  files:\n" \
-            "    - !require \"*.py\"\n"
-
-        config = self.loader.load(content)
-
-        with self.assertRaises(lib50.MissingFilesError):
-            included, excluded = lib50.files(config.get("files"))
-
-    def test_lab50_tags(self):
-        # Four dummy files
-        open("foo.py", "w").close()
-        open("bar.py", "w").close()
-        open("baz.py", "w").close()
-        open("qux.py", "w").close()
-
-        # Dummy config file (.cs50.yml)
-        content = \
-            "lab50:\n" \
-            "  files:\n" \
-            "    - !open \"foo.py\"\n" \
-            "    - !include \"bar.py\"\n" \
-            "    - !exclude \"baz.py\"\n" \
-            "    - \"qux.py\"\n"
-
-        # Create a config Loader for a tool called lab50
-        loader = lib50.config.Loader("lab50")
-
-        # Scope the files section of lab50 with the tags: open, include and exclude
-        loader.scope("files", "open", "include", "exclude", default="include")
-
-        # Load the config
-        config = loader.load(content)
-
-        # Figure out which files have an open tag
-        opened_files = [tagged_value.value for tagged_value in config["files"] if tagged_value.tag == "open"]
-
-        # Have lib50.files figure out which files should be included and excluded
-        # Simultaneously ensure all open files exist
-        included, excluded = lib50.files(config["files"], require_tags=["open"])
-
-        # Make sure that files tagged with open are also included
-        opened_files = [file for file in opened_files if file in included]
-
-        # Assert
-        self.assertEqual(included, {"foo.py", "bar.py", "qux.py"})
-        self.assertEqual(excluded, {"baz.py"})
-        self.assertEqual(set(opened_files), {"foo.py"})
-
-
 class TestLocal(unittest.TestCase):
     def setUp(self):
-        self.loader = lib50.config.Loader("check50")
-        self.loader.scope("files", "include", "exclude", "require")
-
         self.working_directory = tempfile.TemporaryDirectory()
         self._wd = os.getcwd()
         os.chdir(self.working_directory.name)
@@ -471,13 +376,13 @@ class TestLocal(unittest.TestCase):
         os.chdir(self._wd)
 
     def test_local(self):
-        local_dir = lib50.local("cs50/lib50/tests/bar")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
         self.assertTrue((local_dir / ".cs50.yaml").is_file())
 
-        local_dir = lib50.local("cs50/lib50/tests/bar")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
@@ -485,7 +390,7 @@ class TestLocal(unittest.TestCase):
 
         shutil.rmtree(local_dir)
 
-        local_dir = lib50.local("cs50/lib50/tests/bar")
+        local_dir = lib50.local("cs50/problems2/foo/bar", "check50")
 
         self.assertTrue(local_dir.is_dir())
         self.assertTrue((local_dir / "__init__.py").is_file())
