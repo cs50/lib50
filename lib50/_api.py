@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
-DEFAULT_PUSH_ORG = "me50"
+DEFAULT_PUSH_ORG = "submit50"
 AUTH_URL = "https://submit.cs50.io/authorize"
 
 
@@ -230,8 +230,8 @@ def authenticate(org):
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        progress_bar.stop()
         user = _authenticate_ssh(org)
+        progress_bar.stop()
         if user is None:
             # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org) as user:
@@ -724,52 +724,6 @@ def _lfs_add(files, git):
         _run(git("add --force .gitattributes"))
 
 
-def _get_github_id(org, username):
-    """ Get id for username from git config. """
-    # using pexpect.run so that an exception isn't thrown if exit code is nonzero
-    id, exit_code = pexpect.run(f"git config --global {org}.{username}",
-                                withexitstatus=True, env=dict(os.environ), encoding="utf-8")
-    return id if not exit_code else None
-
-
-def _set_github_id(org, username, id):
-    """ Save id for username in git config. """
-    _run(f"git config --global {org}.{username} {id}", quiet=True)
-
-
-def _get_github_user(username=None, password=None):
-    """Query github API for user information. Returns queried credentials as well as user info."""
-    if username is None:
-        username = _prompt_username(_("GitHub username: "))
-
-    if password is None:
-        password = _prompt_password(_("GitHub password for {}: ").format(username))
-
-    try:
-        res = requests.get("https://api.github.com/user", auth=(username, password))
-    except request.exceptions.RequestException:
-        raise Error(_("Failed to connect to GitHub"))
-
-    # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
-    if "X-GitHub-OTP" in res.headers:
-        raise Error(_("Looks like you have two-factor authentication enabled!"
-                      " Please generate a personal access token and use it as your password."
-                      " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info."))
-
-    if res.status_code != 200:
-        logger.info(res.headers)
-        logger.info(res.text)
-        raise Error(_("Invalid username and/or password.") if res.status_code ==
-                    401 else _("Could not authenticate user."))
-
-    user_info = res.json()
-
-    # Normalize capitalization of username
-    username = user_info["login"]
-
-    return (username, password), user_info
-
-
 def _authenticate_ssh(org):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
     # Require ssh-agent
@@ -786,14 +740,8 @@ def _authenticate_ssh(org):
     else:
         return None
 
-    github_id = _get_github_id(org, username)
-
-    if not github_id:
-        github_id = _get_github_user(username)[1]["id"]
-        _set_github_id(org, username, github_id)
-
     return User(name=username,
-                repo=f"git@github.com:{org}/{github_id}")
+                repo=f"git@github.com:{org}/{username}")
 
 
 @contextlib.contextmanager
@@ -818,10 +766,29 @@ def _authenticate_https(org):
                 child.close()
                 child.exitstatus = 0
 
-        (username, password), user_info = _get_github_user(username, password)
-        github_id = user_info["id"]
 
-        _set_github_id(org, username, github_id)
+        if password is None:
+            username = _prompt_username(_("GitHub username: "))
+            password = _prompt_password(_("GitHub password: "))
+
+        # Check if credentials are correct
+        res = requests.get("https://api.github.com/user", auth=(username, password.encode('utf8')))
+
+        # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
+        if "X-GitHub-OTP" in res.headers:
+            raise Error("Looks like you have two-factor authentication enabled!"
+                        " Please generate a personal access token and use it as your password."
+                        " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
+
+        if res.status_code != 200:
+            logger.info(res.headers)
+            logger.info(res.text)
+            raise Error(_("Invalid username and/or password.") if res.status_code ==
+                        401 else _("Could not authenticate user."))
+
+        # Canonicalize (capitalization of) username,
+        # Especially if user logged in via email address
+        username = res.json()["login"]
 
         # Credentials are correct, best cache them
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
@@ -833,7 +800,7 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{github_id}")
+                   repo=f"https://{username}@github.com/{org}/{username}")
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.
         logout()
