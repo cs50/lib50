@@ -340,6 +340,10 @@ def fetch_config(slug):
 
     # If neither exists, error
     if not yml_content and not yaml_content:
+        # Check if GitHub outage may be the source of the issue
+        check_github_status()
+
+        # Otherwise raise an InvalidSlugError
         raise InvalidSlugError(_("Invalid slug: {}. Did you mean something else?").format(slug))
 
     # If both exists, error
@@ -676,8 +680,35 @@ def get_content(org, repo, branch, filepath):
         if r.status_code == 404:
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
         else:
-            raise Error(_("Could not connect to GitHub."))
+            # Check if GitHub outage may be the source of the issue
+            check_github_status()
+
+            # Otherwise raise a ConnectionError
+            raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
     return r.content
+
+
+def check_github_status():
+    """
+    Pings the githubstatus API. Raises an Error if the Git Operations and/or
+    API requests components show an increase in errors.
+    """
+
+    # https://www.githubstatus.com/api
+    status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json")
+
+    # If status check failed
+    if not status_result.ok:
+        raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
+
+    # Get the components lib50 uses
+    components = status_result.json()["components"]
+    relevant_components = [c for c in components if c["name"] in ("Git Operations", "API Requests")]
+
+    # If there is an indication of errors on GitHub's side
+    for component in components:
+        if component["status"] != "operational":
+            raise ConnectionError(_(f"Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."))
 
 
 def _lfs_add(files, git):
