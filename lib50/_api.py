@@ -59,8 +59,8 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
 
         # Show any prompt if specified
         if prompt(included, excluded):
-            user_name, commit_hash = upload(slug, user, tool, commit_suffix)
-            return user_name, commit_hash, message.format(user_name=user_name, slug=slug)
+            username, commit_hash = upload(slug, user, tool, commit_suffix)
+            return username, commit_hash, message.format(username=username, slug=slug)
         else:
             raise Error(_("No files were submitted."))
 
@@ -223,7 +223,7 @@ def connect(slug, config_loader):
         # If a different remote is specified use that instead
         remote = config.get("remote", {
             "org": DEFAULT_PUSH_ORG,
-            "message": "Go to https://submit.cs50.io/users/{user_name}/{slug} to see your results.",
+            "message": "Go to https://submit.cs50.io/users/{username}/{slug} to see your results.",
             "callback": default_callback
         })
 
