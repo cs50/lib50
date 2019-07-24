@@ -30,7 +30,7 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            org, (included, excluded) = lib50.connect("cs50/lib50/tests/bar", self.loader)
+            org, (included, excluded), message = lib50.connect("cs50/lib50/tests/bar", self.loader)
             self.assertEqual(excluded, set())
 
             self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
@@ -40,7 +40,7 @@ class TestConnect(unittest.TestCase):
         loader = lib50.config.Loader("submit50")
         loader.scope("files", "exclude", "include", "require")
         with contextlib.redirect_stdout(f):
-            include, excluded = lib50.connect("cs50/lib50/tests/bar", loader)
+            include, excluded, message = lib50.connect("cs50/lib50/tests/bar", loader)
             self.assertEqual(included, {"hello.py"})
         self.assertTrue("Connecting..." in f.getvalue())
 
