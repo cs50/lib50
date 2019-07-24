@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
-DEFAULT_PUSH_ORG = "submit50"
-AUTH_URL = "https://submit.cs50.io/authorize"
+DEFAULT_PUSH_ORG = "me50"
+AUTH_URL = "https://submit.cs50.io"
 
 
 def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
@@ -51,11 +51,16 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     """
     check_dependencies()
 
-    org, (included, excluded) = connect(slug, config_loader)
+    # Connect to GitHub and parse the config files
+    org, (included, excluded), message = connect(slug, config_loader)
 
+    # Authenticate the user with GitHub, and prepare the submission
     with authenticate(org) as user, prepare(tool, slug, user, included):
+
+        # Show any prompt if specified
         if prompt(included, excluded):
-            return upload(slug, user, tool, commit_suffix)
+            user_name, commit_hash = upload(slug, user, tool, commit_suffix)
+            return user_name, commit_hash, message.format(user_name=user_name, slug=slug)
         else:
             raise Error(_("No files were submitted."))
 
@@ -212,14 +217,36 @@ def connect(slug, config_loader):
         if not isinstance(config, dict):
             config = {}
 
-        org = config.get("org", DEFAULT_PUSH_ORG)
+        # By default send check50/style50 results back to submit.cs50.io
+        default_callback = "https://submit.cs50.io/hooks/results"
+
+        # If a different remote is specified use that instead
+        remote = config.get("remote", {
+            "org": DEFAULT_PUSH_ORG,
+            "message": "Go to https://submit.cs50.io/users/{user_name}/{slug} to see your results.",
+            "callback": default_callback
+        })
+
+        # Require org to be defined
+        if remote.get("org") == None:
+            raise Error(_("org is not specified in remote. Please check your .cs50.yml config file."))
+
+        # Require message to be defined
+        if remote.get("message") == None:
+            raise Error(_("message is not specified in remote. Please check your .cs50.yml config file."))
+
+        # Callback is optional
+        if remote.get("callback") == None:
+            remote["callback"] = default_callback
+
+        # Figure out which files to include and exclude
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return org, (included, excluded)
+        return remote["org"], (included, excluded), remote["message"]
 
 
 @contextlib.contextmanager
@@ -302,7 +329,7 @@ def upload(branch, user, tool, commit_suffix=None):
         # If LANGUAGE environment variable is set, we need to communicate
         # this to any remote tool via the commit message.
         if language:
-            commit_message.append(f"[{language}]")
+            commit_message.append(f"[lang={language}]")
 
         if commit_suffix:
             commit_message.append(commit_suffix)
