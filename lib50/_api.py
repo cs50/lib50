@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
-DEFAULT_PUSH_ORG = "submit50"
-AUTH_URL = "https://submit.cs50.io/authorize"
+DEFAULT_PUSH_ORG = "me50"
+AUTH_URL = "https://submit.cs50.io"
 
 
 def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
@@ -51,11 +51,16 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     """
     check_dependencies()
 
-    org, (included, excluded) = connect(slug, config_loader)
+    # Connect to GitHub and parse the config files
+    org, (included, excluded), message = connect(slug, config_loader)
 
+    # Authenticate the user with GitHub, and prepare the submission
     with authenticate(org) as user, prepare(tool, slug, user, included):
+
+        # Show any prompt if specified
         if prompt(included, excluded):
-            return upload(slug, user, tool, commit_suffix)
+            username, commit_hash = upload(slug, user, tool, commit_suffix)
+            return username, commit_hash, message.format(username=username, slug=slug)
         else:
             raise Error(_("No files were submitted."))
 
@@ -212,14 +217,36 @@ def connect(slug, config_loader):
         if not isinstance(config, dict):
             config = {}
 
-        org = config.get("org", DEFAULT_PUSH_ORG)
+        # By default send check50/style50 results back to submit.cs50.io
+        default_callback = "https://submit.cs50.io/hooks/results"
+
+        # If a different remote is specified use that instead
+        remote = config.get("remote", {
+            "org": DEFAULT_PUSH_ORG,
+            "message": "Go to https://submit.cs50.io/users/{username}/{slug} to see your results.",
+            "callback": default_callback
+        })
+
+        # Require org to be defined
+        if remote.get("org") == None:
+            raise Error(_("org is not specified in remote. Please check your .cs50.yml config file."))
+
+        # Require message to be defined
+        if remote.get("message") == None:
+            raise Error(_("message is not specified in remote. Please check your .cs50.yml config file."))
+
+        # Callback is optional
+        if remote.get("callback") == None:
+            remote["callback"] = default_callback
+
+        # Figure out which files to include and exclude
         included, excluded = files(config.get("files"))
 
         # Check that at least 1 file is staged
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return org, (included, excluded)
+        return remote["org"], (included, excluded), remote["message"]
 
 
 @contextlib.contextmanager
@@ -302,7 +329,7 @@ def upload(branch, user, tool, commit_suffix=None):
         # If LANGUAGE environment variable is set, we need to communicate
         # this to any remote tool via the commit message.
         if language:
-            commit_message.append(f"[{language}]")
+            commit_message.append(f"[lang={language}]")
 
         if commit_suffix:
             commit_message.append(commit_suffix)
@@ -340,6 +367,10 @@ def fetch_config(slug):
 
     # If neither exists, error
     if not yml_content and not yaml_content:
+        # Check if GitHub outage may be the source of the issue
+        check_github_status()
+
+        # Otherwise raise an InvalidSlugError
         raise InvalidSlugError(_("Invalid slug: {}. Did you mean something else?").format(slug))
 
     # If both exists, error
@@ -676,8 +707,35 @@ def get_content(org, repo, branch, filepath):
         if r.status_code == 404:
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
         else:
-            raise Error(_("Could not connect to GitHub."))
+            # Check if GitHub outage may be the source of the issue
+            check_github_status()
+
+            # Otherwise raise a ConnectionError
+            raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
     return r.content
+
+
+def check_github_status():
+    """
+    Pings the githubstatus API. Raises an Error if the Git Operations and/or
+    API requests components show an increase in errors.
+    """
+
+    # https://www.githubstatus.com/api
+    status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json")
+
+    # If status check failed
+    if not status_result.ok:
+        raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
+
+    # Get the components lib50 uses
+    components = status_result.json()["components"]
+    relevant_components = [c for c in components if c["name"] in ("Git Operations", "API Requests")]
+
+    # If there is an indication of errors on GitHub's side
+    for component in components:
+        if component["status"] != "operational":
+            raise ConnectionError(_(f"Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."))
 
 
 def _lfs_add(files, git):
