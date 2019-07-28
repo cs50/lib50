@@ -102,8 +102,9 @@ class Loader:
         # Try extracting just the tool portion
         try:
             config = config[self.tool]
-        except (TypeError, KeyError):
-            raise MissingToolError("No entry for {} found in config file.".format(self.tool))
+            assert config
+        except (TypeError, KeyError, AssertionError):
+            raise MissingToolError("{} is not enabled by this config file.".format(self.tool))
 
         # If no scopes, just apply global default
         if not isinstance(config, dict):
