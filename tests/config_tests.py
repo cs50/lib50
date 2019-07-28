@@ -15,8 +15,8 @@ class TestLoader(unittest.TestCase):
 
     def test_falsy_tool(self):
         content = "check50: false"
-        config = lib50.config.Loader("check50").load(content)
-        self.assertFalse(config)
+        with self.assertRaises(lib50._errors.MissingToolError):
+            config = lib50.config.Loader("check50").load(content)
 
     def test_truthy_tool(self):
         content = "check50: true"
