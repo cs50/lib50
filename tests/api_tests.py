@@ -86,7 +86,7 @@ class TestSlug(unittest.TestCase):
             lib50._api.Slug("cs50/problems2")
 
     def test_online(self):
-        if os.environ.get("TRAVIS") == "TRUE":
+        if os.environ.get("TRAVIS") == "true":
             self.skipTest("Cannot test online in travis.")
 
         slug = lib50._api.Slug("cs50/lib50/tests/bar")
