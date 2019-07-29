@@ -87,7 +87,7 @@ class TestSlug(unittest.TestCase):
 
     def test_online(self):
         if os.environ.get("TRAVIS") == "TRUE":
-            return
+            self.skipTest("Cannot test online in travis.")
 
         slug = lib50._api.Slug("cs50/lib50/tests/bar")
         self.assertEqual(slug.slug, "cs50/lib50/tests/bar")
