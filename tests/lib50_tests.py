@@ -54,7 +54,7 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         loader = lib50.config.Loader("i_do_not_exist")
         with contextlib.redirect_stdout(f):
-            with self.assertRaises(lib50.MissingToolError):
+            with self.assertRaises(lib50.InvalidSlugError):
                 lib50.connect("cs50/lib50/tests/bar", loader)
 
     def test_no_config(self):

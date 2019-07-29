@@ -207,10 +207,9 @@ def connect(slug, config_loader):
         config_yaml = fetch_config(slug)
 
         # Load config file
-        config = config_loader.load(config_yaml)
-
-        # If there is no config for config_loader.tool, error
-        if not config:
+        try:
+            config = config_loader.load(config_yaml)
+        except MissingToolError:
             raise InvalidSlugError(_("Invalid slug for {}. Did you mean something else?").format(config_loader.tool))
 
         # If config of tool is just a truthy value, config should be empty
@@ -218,26 +217,13 @@ def connect(slug, config_loader):
             config = {}
 
         # By default send check50/style50 results back to submit.cs50.io
-        default_callback = "https://submit.cs50.io/hooks/results"
-
-        # If a different remote is specified use that instead
-        remote = config.get("remote", {
+        remote = {
             "org": DEFAULT_PUSH_ORG,
             "message": "Go to https://submit.cs50.io/users/{username}/{slug} to see your results.",
-            "callback": default_callback
-        })
+            "callback": "https://submit.cs50.io/hooks/results"
+        }
 
-        # Require org to be defined
-        if remote.get("org") == None:
-            raise Error(_("org is not specified in remote. Please check your .cs50.yml config file."))
-
-        # Require message to be defined
-        if remote.get("message") == None:
-            raise Error(_("message is not specified in remote. Please check your .cs50.yml config file."))
-
-        # Callback is optional
-        if remote.get("callback") == None:
-            remote["callback"] = default_callback
+        remote.update(config.get("remote", {}))
 
         # Figure out which files to include and exclude
         included, excluded = files(config.get("files"))
@@ -284,8 +270,13 @@ def prepare(tool, branch, user, included):
         try:
             _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
         except Error:
-            raise Error(_("Looks like {} isn't enabled for your account yet. "
-                          "Go to {} and make sure you accept any pending invitations!").format(tool, AUTH_URL))
+            msg = _("Looks like {} isn't enabled for your account yet. ")
+            if user.org != DEFAULT_PUSH_ORG:
+                msg += _("Please contact your instructor about this issue.")
+            else:
+                msg += _("Please go to {} in your web browser and try again.").format(AUTH_URL)
+
+            raise Error(msg)
 
         _run(git("config --bool core.bare false"))
         _run(git(f"config --path core.worktree {area}"))
@@ -475,6 +466,7 @@ def logout():
 class User:
     name = attr.ib()
     repo = attr.ib()
+    org = attr.ib()
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
                     init=False)
@@ -799,7 +791,8 @@ def _authenticate_ssh(org):
         return None
 
     return User(name=username,
-                repo=f"git@github.com:{org}/{username}")
+                repo=f"git@github.com:{org}/{username}",
+                org=org)
 
 
 @contextlib.contextmanager
@@ -858,7 +851,8 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username}")
+                   repo=f"https://{username}@github.com/{org}/{username}",
+                   org=org)
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.
         logout()
