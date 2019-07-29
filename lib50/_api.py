@@ -779,10 +779,15 @@ def _authenticate_ssh(org):
     # Require ssh-agent
     child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
-    i = child.expect(["Hi (.+)! You've successfully authenticated",
-                      "Enter passphrase for key",
-                      "Permission denied",
-                      "Are you sure you want to continue connecting"])
+    try:
+        i = child.expect(["Hi (.+)! You've successfully authenticated",
+                          "Enter passphrase for key",
+                          "Permission denied",
+                          "Are you sure you want to continue connecting"])
+    except pexpect.TIMEOUT:
+        return None
+
+
     child.close()
 
     if i == 0:
