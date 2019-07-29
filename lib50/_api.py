@@ -777,12 +777,17 @@ def _lfs_add(files, git):
 def _authenticate_ssh(org):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
     # Require ssh-agent
-    child = pexpect.spawn("ssh -T git@github.com", encoding="utf8")
+    child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
-    i = child.expect(["Hi (.+)! You've successfully authenticated",
-                      "Enter passphrase for key",
-                      "Permission denied",
-                      "Are you sure you want to continue connecting"])
+    try:
+        i = child.expect(["Hi (.+)! You've successfully authenticated",
+                          "Enter passphrase for key",
+                          "Permission denied",
+                          "Are you sure you want to continue connecting"])
+    except pexpect.TIMEOUT:
+        return None
+
+
     child.close()
 
     if i == 0:
@@ -791,7 +796,7 @@ def _authenticate_ssh(org):
         return None
 
     return User(name=username,
-                repo=f"git@github.com:{org}/{username}",
+                repo=f"ssh://git@ssh.github.com:443/{org}/{username}",
                 org=org)
 
 
