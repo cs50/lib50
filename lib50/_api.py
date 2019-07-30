@@ -270,7 +270,7 @@ def prepare(tool, branch, user, included):
         try:
             _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
         except Error:
-            msg = _("Looks like {} isn't enabled for your account yet. ")
+            msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
                 msg += _("Please contact your instructor about this issue.")
             else:
@@ -377,9 +377,10 @@ def get_local_slugs(tool, similar_to=""):
     If similar_to is given, ranks local slugs by similarity to similar_to.
     """
     # Extract org and repo from slug to limit search
-    slug_path = Path(similar_to)
-    entered_org = slug_path.parts[0] if len(slug_path.parts) >= 1 else ""
-    entered_repo = slug_path.parts[1] if len(slug_path.parts) >= 2 else ""
+    similar_to = similar_to.strip("/")
+    parts = Path(similar_to).parts
+    entered_org = parts[0] if len(parts) >= 1 else ""
+    entered_repo = parts[1] if len(parts) >= 2 else ""
 
     # Find path of local repo's
     local_path = get_local_path()
@@ -568,6 +569,9 @@ class Slug:
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
+
+    def __str__(self):
+        return self.slug
 
 
 class ProgressBar:
