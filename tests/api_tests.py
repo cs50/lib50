@@ -138,7 +138,7 @@ class TestProgressBar(unittest.TestCase):
     def test_progress(self):
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            with lib50._api.ProgressBar("foo"):
+            with lib50._api.ProgressBar("foo", output_stream=sys.stdout):
                 pass
         self.assertTrue("foo..." in f.getvalue())
 
@@ -148,7 +148,7 @@ class TestProgressBar(unittest.TestCase):
             try:
                 old_ticks_per_second = lib50._api.ProgressBar.TICKS_PER_SECOND
                 lib50._api.ProgressBar.TICKS_PER_SECOND = 100
-                with lib50._api.ProgressBar("foo"):
+                with lib50._api.ProgressBar("foo", output_stream=sys.stdout):
                     time.sleep(.5)
             finally:
                 lib50._api.ProgressBar.TICKS_PER_SECOND = old_ticks_per_second
@@ -163,7 +163,7 @@ class TestProgressBar(unittest.TestCase):
                 lib50._api.ProgressBar.DISABLED = True
                 old_ticks_per_second = lib50._api.ProgressBar.TICKS_PER_SECOND
                 lib50._api.ProgressBar.TICKS_PER_SECOND = 100
-                with lib50._api.ProgressBar("foo"):
+                with lib50._api.ProgressBar("foo", output_stream=sys.stdout):
                     time.sleep(.5)
             finally:
                 lib50._api.ProgressBar.DISABLED = old_disabled
