@@ -34,7 +34,6 @@ class TestConnect(unittest.TestCase):
             self.assertEqual(excluded, set())
 
             self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
-        self.assertTrue("Connecting..." in f.getvalue())
 
         f = io.StringIO()
         loader = lib50.config.Loader("submit50")
@@ -42,7 +41,6 @@ class TestConnect(unittest.TestCase):
         with contextlib.redirect_stdout(f):
             include, excluded, message = lib50.connect("cs50/lib50/tests/bar", loader)
             self.assertEqual(included, {"hello.py"})
-        self.assertTrue("Connecting..." in f.getvalue())
 
     def test_missing_problem(self):
         f = io.StringIO()
