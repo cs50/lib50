@@ -570,6 +570,9 @@ class Slug:
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
 
+    def __str__(self):
+        return self.slug
+
 
 class ProgressBar:
     """Show a progress bar starting with message."""
