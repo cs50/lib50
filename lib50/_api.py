@@ -377,9 +377,10 @@ def get_local_slugs(tool, similar_to=""):
     If similar_to is given, ranks local slugs by similarity to similar_to.
     """
     # Extract org and repo from slug to limit search
-    slug_path = Path(similar_to)
-    entered_org = slug_path.parts[0] if len(slug_path.parts) >= 1 else ""
-    entered_repo = slug_path.parts[1] if len(slug_path.parts) >= 2 else ""
+    similar_to = similar_to.strip("/")
+    parts = Path(similar_to).parts
+    entered_org = parts[0] if len(parts) >= 1 else ""
+    entered_repo = parts[1] if len(parts) >= 2 else ""
 
     # Find path of local repo's
     local_path = get_local_path()
