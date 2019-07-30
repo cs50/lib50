@@ -20,6 +20,7 @@ import threading
 import termios
 import time
 import tty
+import functools
 
 import attr
 import jellyfish
@@ -583,6 +584,7 @@ class ProgressBar:
         self._message = message
         self._progressing = False
         self._thread = None
+        self._print = functools.partial(print, file=sys.stdout)
 
     def stop(self):
         """Stop the progress bar."""
@@ -592,18 +594,18 @@ class ProgressBar:
 
     def __enter__(self):
         def progress_runner():
-            print(f"{self._message}...", end="", flush=True)
+            self._print(f"{self._message}...", end="", flush=True)
             while self._progressing:
-                print(".", end="", flush=True)
+                self._print(".", end="", flush=True)
                 time.sleep(1 / ProgressBar.TICKS_PER_SECOND if ProgressBar.TICKS_PER_SECOND else 0)
-            print()
+            self._print()
 
         if not ProgressBar.DISABLED:
             self._progressing = True
             self._thread = threading.Thread(target=progress_runner)
             self._thread.start()
         else:
-            print(f"{self._message}...")
+            self._print(f"{self._message}...")
 
         return self
 
