@@ -580,11 +580,11 @@ class ProgressBar:
     DISABLED = False
     TICKS_PER_SECOND = 2
 
-    def __init__(self, message):
+    def __init__(self, message, output_stream=sys.__stderr__):
         self._message = message
         self._progressing = False
         self._thread = None
-        self._print = functools.partial(print, file=sys.stdout)
+        self._print = functools.partial(print, file=output_stream)
 
     def stop(self):
         """Stop the progress bar."""
