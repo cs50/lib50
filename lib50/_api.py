@@ -873,7 +873,11 @@ def _authenticate_https(org):
 def _prompt_username(prompt="Username: "):
     """Prompt the user for username."""
     try:
-        return input(prompt).strip()
+        username = input(prompt).strip()
+        while not username:
+            print("Username cannot be empty, please try again.")
+            username = input(prompt).strip()
+        return username
     except EOFError:
         print()
 
@@ -913,6 +917,10 @@ def _prompt_password(prompt="Password: "):
                     pass
                 else:
                     print("*", end="", flush=True)
+
+    if not password_string:
+        print("Password cannot be empty, please try again.")
+        return _prompt_password(prompt)
 
     return password_string
 
