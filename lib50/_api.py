@@ -76,18 +76,18 @@ def local(slug, offline=False):
 
     local_path = get_local_path() / slug.org / slug.repo
 
-    git = Git(f"-C {shlex.quote(str(local_path))}")
+    git = Git().set("-C {path}", path=str(local_path))
     if not local_path.exists():
-        _run(Git()(f"init {shlex.quote(str(local_path))}"))
+        _run(Git()("init {path}", path=str(local_path)))
         _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
 
     if not offline:
         # Get latest version of checks
-        _run(git(f"fetch origin {slug.branch}"))
+        _run(git("fetch origin {branch}", branch=slug.branch))
 
     # Ensure that local copy of the repo is identical to remote copy
-    _run(git(f"checkout -f -B {slug.branch} origin/{slug.branch}"))
-    _run(git(f"reset --hard HEAD"))
+    _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
+    _run(git("reset --hard HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -265,11 +265,11 @@ def prepare(tool, branch, user, included):
     Check that atleast one file is staged
     """
     with ProgressBar(_("Preparing")) as progress_bar, working_area(included) as area:
-        Git.working_area = f"-C {area}"
-        git = Git(Git.working_area)
+        Git.working_area = f"-C {shlex.quote(str(area))}"
+        git = Git().set(Git.working_area)
         # Clone just .git folder
         try:
-            _run(git.set(Git.cache)(f"clone --bare {user.repo} .git"))
+            _run(git.set(Git.cache)(f"clone --bare {shlex.quote(user.repo)} .git"))
         except Error:
             msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
@@ -280,23 +280,23 @@ def prepare(tool, branch, user, included):
             raise Error(msg)
 
         _run(git("config --bool core.bare false"))
-        _run(git(f"config --path core.worktree {area}"))
+        _run(git("config --path core.worktree {area}", area=str(area)))
 
         try:
-            _run(git("checkout --force {} .gitattributes".format(branch)))
+            _run(git("checkout --force {branch} .gitattributes", branch=branch))
         except Error:
             pass
 
         # Set user name/email in repo config
-        _run(git(f"config user.email {shlex.quote(user.email)}"))
-        _run(git(f"config user.name {shlex.quote(user.name)}"))
+        _run(git("config user.email {email}", email=user.email))
+        _run(git("config user.name {name}", name=user.name))
 
         # Switch to branch without checkout
-        _run(git(f"symbolic-ref HEAD refs/heads/{branch}"))
+        _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
         # Git add all included files
         for f in included:
-            _run(git(f"add {f}"))
+            _run(git("add {file}", file=f))
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -329,9 +329,9 @@ def upload(branch, user, tool, commit_suffix=None):
         commit_message = " ".join(commit_message)
 
         # Commit + push
-        git = Git(Git.working_area)
-        _run(git(f"commit -m {shlex.quote(commit_message)} --allow-empty"))
-        _run(git.set(Git.cache)(f"push origin {branch}"))
+        git = Git().set(Git.working_area)
+        _run(git("commit -m {msg} --allow-empty", msg=commit_message))
+        _run(git.set(Git.cache)("push origin {branch}", branch=branch))
         commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
@@ -478,21 +478,26 @@ class Git:
     cache = ""
     working_area = ""
 
-    def __init__(self, *args):
-        self._args = args
+    def __init__(self):
+        self._args = []
 
-    def set(self, arg):
-        return Git(*self._args, arg)
+    def set(self, arg, **kwargs):
+        kwargs = {name: shlex.quote(arg) for name, arg in kwargs.items()}
+        git = Git()
+        git._args = self._args[:]
+        git._args.append(arg.format(**kwargs))
+        return git
 
-    def __call__(self, command):
+    def __call__(self, command, **kwargs):
+
+        kwargs = {name: shlex.quote(arg) for name, arg in kwargs.items()}
+
+        command = command.format(**kwargs)
         git_command = f"git {' '.join(self._args)} {command}"
         git_command = re.sub(' +', ' ', git_command)
 
         # Format to show in git info
-        logged_command = git_command
-        for opt in [Git.cache, Git.working_area]:
-            logged_command = logged_command.replace(str(opt), "")
-        logged_command = re.sub(' +', ' ', logged_command)
+        logged_command = re.sub(' +', ' ', f"git {command}")
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
@@ -774,9 +779,9 @@ def _lfs_add(files, git):
 
         # Rm previously added file, have lfs track file, add file again
         for large in larges:
-            _run(git("rm --cached {}".format(shlex.quote(large))))
-            _run(git("lfs track {}".format(shlex.quote(large))))
-            _run(git("add {}".format(shlex.quote(large))))
+            _run(git("rm --cached {large}", large=large))
+            _run(git("lfs track {large}", large=large))
+            _run(git("add {large}", large=large))
         _run(git("add --force .gitattributes"))
 
 
@@ -812,7 +817,7 @@ def _authenticate_https(org):
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
         Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = Git(Git.cache)
+        git = Git().set(Git.cache)
 
         # Get credentials from cache if possible
         with _spawn(git("credential fill"), quiet=True) as child:
