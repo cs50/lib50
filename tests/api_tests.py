@@ -40,9 +40,9 @@ class TestGit(unittest.TestCase):
         self.assertTrue(self.debug_output, ["git bar foo"])
 
     def test_args(self):
-        self.assertEqual(lib50._api.Git("bar").set("baz")("foo"), "git bar baz foo")
-        self.assertEqual(self.info_output, [termcolor.colored("git bar baz foo", attrs=["bold"])])
-        self.assertTrue(self.debug_output, ["git bar baz foo"])
+        self.assertEqual(lib50._api.Git().set("baz")("foo"), "git baz foo")
+        self.assertEqual(self.info_output, [termcolor.colored("git baz foo", attrs=["bold"])])
+        self.assertTrue(self.debug_output, ["git baz foo"])
 
     def test_special_args_not_set(self):
         try:
@@ -63,7 +63,7 @@ class TestGit(unittest.TestCase):
             lib50._api.Git.working_area = "bar"
             lib50._api.Git.cache = "baz"
 
-            git = lib50._api.Git(lib50._api.Git.working_area, lib50._api.Git.cache)
+            git = lib50._api.Git().set(lib50._api.Git.working_area).set(lib50._api.Git.cache)
             self.assertEqual(git("foo"), "git bar baz foo")
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
             self.assertTrue(self.debug_output, ["git bar baz foo"])
