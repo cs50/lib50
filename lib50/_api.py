@@ -482,6 +482,7 @@ class Git:
         self._args = []
 
     def set(self, git_arg, **format_args):
+        """git = Git().set("-C {folder}", folder="foo")"""
         format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
         git = Git()
         git._args = self._args[:]
@@ -489,6 +490,7 @@ class Git:
         return git
 
     def __call__(self, command, **format_args):
+        """Git()("git clone {repo}", repo="foo")"""
         git = self.set(command, **format_args)
 
         git_command = f"git {' '.join(git._args)}"
