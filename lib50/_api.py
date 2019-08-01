@@ -481,23 +481,24 @@ class Git:
     def __init__(self):
         self._args = []
 
-    def set(self, arg, **kwargs):
-        kwargs = {name: shlex.quote(arg) for name, arg in kwargs.items()}
+    def set(self, git_arg, **format_args):
+        format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
         git = Git()
         git._args = self._args[:]
-        git._args.append(arg.format(**kwargs))
+        git._args.append(git_arg.format(**format_args))
         return git
 
-    def __call__(self, command, **kwargs):
+    def __call__(self, command, **format_args):
+        git = self.set(command, **format_args)
 
-        kwargs = {name: shlex.quote(arg) for name, arg in kwargs.items()}
-
-        command = command.format(**kwargs)
-        git_command = f"git {' '.join(self._args)} {command}"
+        git_command = f"git {' '.join(git._args)}"
         git_command = re.sub(' +', ' ', git_command)
 
         # Format to show in git info
-        logged_command = re.sub(' +', ' ', f"git {command}")
+        logged_command = git_command
+        for opt in [Git.cache, Git.working_area]:
+            logged_command = logged_command.replace(str(opt), "")
+        logged_command = re.sub(' +', ' ', logged_command)
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
