@@ -35,7 +35,7 @@ from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
-           "fetch_config", "get_local_slugs"]
+           "fetch_config", "get_local_slugs", "check_github_status", "Slug"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -50,6 +50,9 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
+
+    slug = Slug.normalize_case(slug)
+
     check_dependencies()
 
     # Connect to GitHub and parse the config files
@@ -71,6 +74,7 @@ def local(slug, offline=False):
     Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
     """
+
     # Parse slug
     slug = Slug(slug, offline=offline)
 
@@ -269,7 +273,7 @@ def prepare(tool, branch, user, included):
         git = Git().set(Git.working_area)
         # Clone just .git folder
         try:
-            _run(git.set(Git.cache)(f"clone --bare {shlex.quote(user.repo)} .git"))
+            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
         except Error:
             msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
@@ -482,6 +486,7 @@ class Git:
         self._args = []
 
     def set(self, git_arg, **format_args):
+        """git = Git().set("-C {folder}", folder="foo")"""
         format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
         git = Git()
         git._args = self._args[:]
@@ -489,6 +494,7 @@ class Git:
         return git
 
     def __call__(self, command, **format_args):
+        """Git()("git clone {repo}", repo="foo")"""
         git = self.set(command, **format_args)
 
         git_command = f"git {' '.join(git._args)}"
@@ -512,20 +518,20 @@ class Git:
 class Slug:
     def __init__(self, slug, offline=False):
         """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
-        self.slug = slug
+        self.slug = self.normalize_case(slug)
         self.offline = offline
 
         # Assert begin/end of slug are correct
         self._check_endings()
 
         # Find third "/" in identifier
-        idx = slug.find("/", slug.find("/") + 1)
+        idx = self.slug.find("/", self.slug.find("/") + 1)
         if idx == -1:
             raise InvalidSlugError(_("Invalid slug"))
 
         # Split slug in <org>/<repo>/<remainder>
-        remainder = slug[idx + 1:]
-        self.org, self.repo = slug.split("/")[:2]
+        remainder = self.slug[idx + 1:]
+        self.org, self.repo = self.slug.split("/")[:2]
 
         # Gather all branches
         try:
@@ -544,7 +550,7 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlugError(_("Invalid slug: {}".format(slug)))
+            raise InvalidSlugError(_("Invalid slug: {}".format(self.slug)))
 
     def _check_endings(self):
         """Check begin/end of slug, raises Error if malformed."""
@@ -576,6 +582,16 @@ class Slug:
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
+
+    @staticmethod
+    def normalize_case(slug):
+        parts = slug.split("/")
+        if len(parts) < 3:
+            raise InvalidSlugError(_("Invalid slug"))
+        parts[0] = parts[0].lower()
+        parts[1] = parts[1].lower()
+        return "/".join(parts)
+
 
     def __str__(self):
         return self.slug
