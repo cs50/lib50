@@ -273,7 +273,7 @@ def prepare(tool, branch, user, included):
         git = Git().set(Git.working_area)
         # Clone just .git folder
         try:
-            _run(git.set(Git.cache)(f"clone --bare {repo} .git", repo=user.repo))
+            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
         except Error:
             msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
