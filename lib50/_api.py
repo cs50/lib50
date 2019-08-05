@@ -300,7 +300,7 @@ def prepare(tool, branch, user, included):
 
         # Git add all included files
         for f in included:
-            _run(git("add {file}", file=f))
+            _run(git("add -f {file}", file=f))
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
