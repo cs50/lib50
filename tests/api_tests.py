@@ -32,17 +32,14 @@ class TestGit(unittest.TestCase):
     def test_no_args(self):
         self.assertEqual(lib50._api.Git()("foo"), "git foo")
         self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
-        self.assertTrue(self.debug_output, ["git foo"])
 
     def test_arg(self):
         self.assertEqual(lib50._api.Git().set("bar")("foo"), "git bar foo")
         self.assertEqual(self.info_output, [termcolor.colored("git bar foo", attrs=["bold"])])
-        self.assertTrue(self.debug_output, ["git bar foo"])
 
     def test_args(self):
         self.assertEqual(lib50._api.Git().set("baz")("foo"), "git baz foo")
         self.assertEqual(self.info_output, [termcolor.colored("git baz foo", attrs=["bold"])])
-        self.assertTrue(self.debug_output, ["git baz foo"])
 
     def test_special_args_not_set(self):
         try:
@@ -52,7 +49,6 @@ class TestGit(unittest.TestCase):
 
             self.assertEqual(lib50._api.Git()("foo"), "git foo")
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
-            self.assertTrue(self.debug_output, ["git foo"])
         finally:
             lib50._api.Git.work_tree = ""
             lib50._api.Git.git_dir = ""
@@ -66,7 +62,6 @@ class TestGit(unittest.TestCase):
             git = lib50._api.Git().set(lib50._api.Git.working_area).set(lib50._api.Git.cache)
             self.assertEqual(git("foo"), "git bar baz foo")
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
-            self.assertTrue(self.debug_output, ["git bar baz foo"])
         finally:
             lib50._api.Git.working_area = ""
             lib50._api.Git.cache = ""
@@ -257,6 +252,8 @@ class TestGetLocalSlugs(unittest.TestCase):
         lib50.set_local_path(self.old_path)
 
     def test_one_local_slug(self):
+        print(self.debug_output)
+        print(lib50.get_local_path())
         slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
         self.assertEqual(slugs[0], "foo/bar/master/baz")
