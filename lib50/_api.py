@@ -299,8 +299,7 @@ def prepare(tool, branch, user, included):
         _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
         # Git add all included files
-        for f in included:
-            _run(git("add -f {file}", file=f))
+        _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -508,9 +507,6 @@ class Git:
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
-
-        # Log actual command in debug
-        logger.debug(git_command)
 
         return git_command
 
