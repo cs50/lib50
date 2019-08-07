@@ -857,7 +857,7 @@ def _authenticate_https(org):
         # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
         if "X-GitHub-OTP" in res.headers:
             raise Error("Looks like you have two-factor authentication enabled!"
-                        " Please generate a personal access token and use it as your password."
+                        " Please generate a personal access token (with GitHub's `repo` scope) and use it as your password."
                         " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
 
         if res.status_code != 200:
