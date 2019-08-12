@@ -33,3 +33,6 @@ class TimeoutError(Error):
 
 class ConnectionError(Error):
     pass
+
+class InvalidSignatureError(Error):
+    pass

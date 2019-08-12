@@ -246,13 +246,19 @@ class TestGetLocalSlugs(unittest.TestCase):
         pexpect.run(f"git -C {path.parent.parent} init")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
+        self.debug_output = []
+        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         self.temp_dir.cleanup()
         lib50.set_local_path(self.old_path)
 
     def test_one_local_slug(self):
-        slugs = list(lib50.get_local_slugs("foo50"))
+        try:
+            slugs = list(lib50.get_local_slugs("foo50"))
+        except:
+            print(self.debug_output)
+            raise
         self.assertEqual(len(slugs), 1)
         self.assertEqual(slugs[0], "foo/bar/master/baz")
 

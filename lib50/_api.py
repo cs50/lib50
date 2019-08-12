@@ -45,7 +45,7 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True, on_behalf_of=None):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
@@ -59,12 +59,12 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     org, (included, excluded), message = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
-    with authenticate(org) as user, prepare(tool, slug, user, included):
+    with authenticate(org, repo=on_behalf_of) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, commit_suffix)
-            return username, commit_hash, message.format(username=username, slug=slug)
+            return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
         else:
             raise Error(_("No files were submitted."))
 
@@ -241,18 +241,18 @@ def connect(slug, config_loader):
 
 
 @contextlib.contextmanager
-def authenticate(org):
+def authenticate(org, repo=None):
     """
     Authenticate with GitHub via SSH if possible
     Otherwise authenticate via HTTPS
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org)
+        user = _authenticate_ssh(org, repo=repo)
         progress_bar.stop()
         if user is None:
             # SSH auth failed, fallback to HTTPS
-            with _authenticate_https(org) as user:
+            with _authenticate_https(org, repo=repo) as user:
                 yield user
         else:
             yield user
@@ -414,7 +414,8 @@ def get_local_slugs(tool, similar_to=""):
     for path in valid_paths:
         org, repo = path.parts[0:2]
         if (org, repo) not in branch_map:
-            branch = _run(f"git -C {local_path / path.parent} rev-parse --abbrev-ref HEAD")
+            git = Git().set("-C {path}", path=str(local_path / path.parent))
+            branch = _run(git("rev-parse --abbrev-ref HEAD"))
             branch_map[(org, repo)] = branch
 
     # Reconstruct slugs for each config file
@@ -798,7 +799,7 @@ def _lfs_add(files, git):
         _run(git("add --force .gitattributes"))
 
 
-def _authenticate_ssh(org):
+def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
     # Require ssh-agent
     child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
@@ -820,12 +821,12 @@ def _authenticate_ssh(org):
         return None
 
     return User(name=username,
-                repo=f"ssh://git@ssh.github.com:443/{org}/{username}",
+                repo=f"ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
                 org=org)
 
 
 @contextlib.contextmanager
-def _authenticate_https(org):
+def _authenticate_https(org, repo=None):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
@@ -880,7 +881,7 @@ def _authenticate_https(org):
             child.sendline("")
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username}",
+                   repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
                    org=org)
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.

@@ -19,4 +19,4 @@ def set_local_path(path):
 
 from ._api import *
 from ._errors import *
-from . import config
+from . import config, crypto
