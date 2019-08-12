@@ -23,7 +23,11 @@ def verify(payload, signature, public_key):
     """
     Verify payload using (base64 encoded) signature and verification key. verification_key should be obtained from load_public_key
     Uses RSA-PSS with SHA-512 and maximum salt length.
-    The corresponding openssl command to create signatures that this function can verify is
+    The corresponding openssl command to create signatures that this function can verify is:
+
+    openssl dgst -sha512 -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:-2 -sign <PRIVATE_KEY> <PAYLOAD> | openssl base64 -A
+
+    returns a boolean that is true iff the payload could be verified
     """
 
     try:
@@ -34,7 +38,9 @@ def verify(payload, signature, public_key):
                                       salt_length=padding.PSS.MAX_LENGTH),
                           algorithm=hashes.SHA512())
     except InvalidSignature:
-        raise InvalidSignatureError("failed to verify payload")
+        return False
+
+    return True
 
 
 def sign(payload, private_key):
