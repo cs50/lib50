@@ -29,7 +29,3 @@ class TestCrypt(unittest.TestCase):
 
         signature1 = lib50.crypto.sign(payload1, self.private_key)
         self.assertFalse(lib50.crypto.verify(payload2, signature1, self.public_key))
-
-
-
-
