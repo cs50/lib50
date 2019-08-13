@@ -254,11 +254,7 @@ class TestGetLocalSlugs(unittest.TestCase):
         lib50.set_local_path(self.old_path)
 
     def test_one_local_slug(self):
-        try:
-            slugs = list(lib50.get_local_slugs("foo50"))
-        except:
-            print(self.debug_output)
-            raise
+        slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
         self.assertEqual(slugs[0], "foo/bar/master/baz")
 
