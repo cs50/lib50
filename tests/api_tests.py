@@ -246,6 +246,8 @@ class TestGetLocalSlugs(unittest.TestCase):
         pexpect.run(f"git -C {path.parent.parent} init")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
+        self.debug_output = []
+        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         self.temp_dir.cleanup()
