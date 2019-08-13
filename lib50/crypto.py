@@ -1,4 +1,3 @@
-import os
 import base64
 
 from cryptography.exceptions import InvalidSignature
