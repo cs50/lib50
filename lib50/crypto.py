@@ -1,8 +1,5 @@
 import os
 import base64
-import hashlib
-import hmac
-import itertools
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization, hashes
