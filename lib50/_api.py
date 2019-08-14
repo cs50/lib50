@@ -35,7 +35,7 @@ from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
-           "fetch_config", "get_local_slugs", "check_github_status", "Slug"]
+           "fetch_config", "get_local_slugs", "check_github_status", "Slug", "cd"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
