@@ -35,7 +35,7 @@ from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
-           "fetch_config", "get_local_slugs", "check_github_status", "Slug"]
+           "fetch_config", "get_local_slugs", "check_github_status", "Slug", "cd"]
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -52,6 +52,8 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     """
 
     slug = Slug.normalize_case(slug)
+    if on_behalf_of is not None:
+        commit_suffix += f" [on_behalf_of={on_behalf_of}]"
 
     check_dependencies()
 
@@ -599,7 +601,11 @@ class ProgressBar:
     DISABLED = False
     TICKS_PER_SECOND = 2
 
-    def __init__(self, message, output_stream=sys.__stderr__):
+    def __init__(self, message, output_stream=None):
+
+        if output_stream is None:
+            output_stream = sys.stderr
+
         self._message = message
         self._progressing = False
         self._thread = None
