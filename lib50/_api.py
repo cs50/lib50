@@ -45,7 +45,7 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, data=None, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
@@ -58,8 +58,6 @@ def push(tool, slug, config_loader, data=None, prompt=lambda included, excluded:
     if language:
         data.setdefault("lang", language)
 
-    on_behalf_of = data.get("on_behalf_of")
-
     slug = Slug.normalize_case(slug)
 
     check_dependencies()
@@ -68,7 +66,7 @@ def push(tool, slug, config_loader, data=None, prompt=lambda included, excluded:
     org, (included, excluded), message = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
-    with authenticate(org, repo=on_behalf_of) as user, prepare(tool, slug, user, included):
+    with authenticate(org, repo=repo) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
         if prompt(included, excluded):
