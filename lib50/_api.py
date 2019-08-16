@@ -45,15 +45,20 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, excluded: True, on_behalf_of=None):
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
     """
 
+    if data is None:
+        data = {}
+
+    language = os.environ.get("LANGUAGE")
+    if language:
+        data.setdefault("lang", language)
+
     slug = Slug.normalize_case(slug)
-    if on_behalf_of is not None:
-        commit_suffix += f" [on_behalf_of={on_behalf_of}]"
 
     check_dependencies()
 
@@ -61,11 +66,11 @@ def push(tool, slug, config_loader, commit_suffix=None, prompt=lambda included, 
     org, (included, excluded), message = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
-    with authenticate(org, repo=on_behalf_of) as user, prepare(tool, slug, user, included):
+    with authenticate(org, repo=repo) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
         if prompt(included, excluded):
-            username, commit_hash = upload(slug, user, tool, commit_suffix)
+            username, commit_hash = upload(slug, user, tool, data)
             return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
         else:
             raise Error(_("No files were submitted."))
@@ -314,24 +319,18 @@ def prepare(tool, branch, user, included):
         yield
 
 
-def upload(branch, user, tool, commit_suffix=None):
+def upload(branch, user, tool, data):
     """
     Commit + push to branch
     Returns username, commit hash
     """
+
     with ProgressBar(_("Uploading")):
-        language = os.environ.get("LANGUAGE")
-        commit_message = [_("automated commit by {}").format(tool)]
+        commit_message = _("automated commit by {}").format(tool)
 
-        # If LANGUAGE environment variable is set, we need to communicate
-        # this to any remote tool via the commit message.
-        if language:
-            commit_message.append(f"[lang={language}]")
+        data_str = " ".join(f"[{key}={val}]" for key, val in data.items())
 
-        if commit_suffix:
-            commit_message.append(commit_suffix)
-
-        commit_message = " ".join(commit_message)
+        commit_message = f"{commit_message} {data_str}"
 
         # Commit + push
         git = Git().set(Git.working_area)
