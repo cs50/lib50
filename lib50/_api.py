@@ -708,7 +708,7 @@ def _spawn(command, quiet=False, timeout=None):
 
         exitcode = child.proc.returncode if os.name == "nt" else child.exitstatus
 
-        if child.signalstatus is None and child.proc.returncode != 0:
+        if child.signalstatus is None and exitcode != 0:
             logger.debug("{} exited with {}".format(command, child.exitstatus))
             raise Error()
 
@@ -851,7 +851,7 @@ def _authenticate_ssh(org, repo=None):
         child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
     else:
         child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
-    
+
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         i = child.expect(["Hi (.+)! You've successfully authenticated",
