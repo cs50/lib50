@@ -669,11 +669,18 @@ class _StreamToLogger:
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
     # Spawn command
-    child = popen_spawn.PopenSpawn(
-        command,
-        encoding="utf-8",
-        env=dict(os.environ),
-        timeout=timeout)
+    if os.name == "nt":
+        child = popen_spawn.PopenSpawn(
+            command,
+            encoding="utf-8",
+            env=dict(os.environ),
+            timeout=timeout)
+    else:
+        child = pexpect.spawn(
+            command,
+            encoding="utf-8",
+            env=dict(os.environ),
+            timeout=timeout)
 
     try:
         if not quiet:
@@ -840,8 +847,11 @@ def _authenticate_ssh(org, repo=None):
         ssh_path = "ssh"
 
     # Require ssh-agent
-    child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
-
+    if os.name == "nt":
+        child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+    else:
+        child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+    
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         i = child.expect(["Hi (.+)! You've successfully authenticated",
