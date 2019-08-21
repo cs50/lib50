@@ -22,6 +22,7 @@ import tempfile
 import threading
 import time
 import functools
+from winpty import PtyProcess
 
 import attr
 import jellyfish
@@ -45,9 +46,11 @@ logger.addHandler(logging.NullHandler())
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
+AUTHENTICATION_METHOD = ""
+PASSWORD = ""
 
 if os.name == "nt":
-    shlex.quote = lambda text: "\"{}\"".format(text)
+    shlex.quote = lambda text: text
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
@@ -119,22 +122,23 @@ def working_area(files, name=""):
     Optionally names the working area name
     Returns path to the working area
     """
-    with tempfile.TemporaryDirectory() as dir:
-        dir = Path(Path(dir) / name)
-        dir.mkdir(exist_ok=True)
+    # with tempfile.TemporaryDirectory() as dir:
+    dir = "qux"
+    dir = Path(Path(dir) / name).absolute()
+    dir.mkdir(exist_ok=True)
 
-        for f in files:
-            dest = (dir / f).absolute()
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(f, dest)
-        yield dir
+    for f in files:
+        dest = (dir / f).absolute()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(f, dest)
+    yield dir
 
-        # Ensure we have permission to cleanup tempdir on Windows
-        if os.name == "nt":
-            for root, dirs, files in os.walk(str(dir)):
-                for fname in files:
-                    full_path = os.path.join(root, fname)
-                    os.chmod(full_path ,stat.S_IWRITE)
+    # Ensure we have permission to cleanup tempdir on Windows
+    if os.name == "nt":
+        for root, dirs, files in os.walk(str(dir)):
+            for fname in files:
+                full_path = os.path.join(root, fname)
+                os.chmod(full_path ,stat.S_IWRITE)
 
 
 @contextlib.contextmanager
@@ -345,6 +349,10 @@ def upload(branch, user, tool, data):
 
         # Commit + push
         git = Git().set(Git.working_area)
+
+        if os.name == "nt":
+            commit_message = commit_message.replace(" ", "_")
+
         _run(git("commit -m {msg} --allow-empty", msg=commit_message))
         _run(git.set(Git.cache)("push origin {branch}", branch=branch))
         commit_hash = _run(git("rev-parse HEAD"))
@@ -583,7 +591,13 @@ class Slug:
             try:
                 with _spawn(cmd, timeout=3) as child:
                     if os.name == "nt":
-                        output = child.read().strip().split("\n")
+                        input = child.readline()
+                        input = child.read()
+                        def escape_ansi(line):
+                            ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
+                            return ansi_escape.sub('', line)
+                        input = escape_ansi(input)
+                        output = input.strip().split("\r\n")
                     else:
                         output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
@@ -591,6 +605,8 @@ class Slug:
                     return []
                 else:
                     raise TimeoutError(3)
+
+        print([line.split()[1].replace("refs/heads/", "") for line in output])
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
@@ -670,11 +686,33 @@ class _StreamToLogger:
 def _spawn(command, quiet=False, timeout=None):
     # Spawn command
     if os.name == "nt":
-        child = popen_spawn.PopenSpawn(
+        child = PtyProcess.spawn(
             command,
-            encoding="utf-8",
-            env=dict(os.environ),
-            timeout=timeout)
+            env=dict(os.environ)
+        )
+
+        try:
+            if child.isalive() and PASSWORD:
+                # print(PASSWORD, len(PASSWORD))
+                child.write(PASSWORD)
+            yield child
+        except BaseException:
+            del child
+            raise
+        else:
+            timeout = 5
+            start = time.time()
+            while child.isalive() and time.time() < start + timeout:
+                time.sleep(.1)
+
+            exitcode = child.exitstatus
+            child.close(force=True)
+
+            if exitcode != 0:
+                logger.debug("{} exited with {}".format(command, exitcode))
+
+            print(exitcode)
+
     else:
         child = pexpect.spawn(
             command,
@@ -682,35 +720,26 @@ def _spawn(command, quiet=False, timeout=None):
             env=dict(os.environ),
             timeout=timeout)
 
-    try:
-        if not quiet:
-            # Log command output to logger
-            child.logfile_read = _StreamToLogger(logger.debug)
-        yield child
-    except BaseException:
-        if os.name == "nt":
-            child.kill(signal.SIGINT)
-        else:
+        try:
+            if not quiet:
+                # Log command output to logger
+                child.logfile_read = _StreamToLogger(logger.debug)
+            yield child
+        except BaseException:
             child.close()
-        raise
-    else:
-        is_alive = child.proc.poll() == None if os.name == "nt" else child.isalive()
-        if is_alive:
-            try:
-                child.expect(pexpect.EOF, timeout=timeout)
-            except pexpect.TIMEOUT:
-                raise Error()
-
-        if os.name == "nt":
-            child.kill(signal.SIGINT)
+            raise
         else:
+            if child.isalive():
+                try:
+                    child.expect(pexpect.EOF, timeout=timeout)
+                except pexpect.TIMEOUT:
+                    raise Error()
+
             child.close(force=True)
+            exitcode = child.exitstatus
 
-        exitcode = child.proc.returncode if os.name == "nt" else child.exitstatus
-
-        if child.signalstatus is None and exitcode != 0:
-            logger.debug("{} exited with {}".format(command, child.exitstatus))
-            raise Error()
+            if child.signalstatus is None and exitcode != 0:
+                logger.debug("{} exited with {}".format(command, child.exitstatus))
 
 
 def _run(command, quiet=False, timeout=None):
@@ -871,8 +900,15 @@ def _authenticate_ssh(org, repo=None):
     else:
         return None
 
+    global AUTHENTICATION_METHOD
+    AUTHENTICATION_METHOD = "ssh"
+
+    if os.name == "nt":
+        global PASSWORD
+        PASSWORD = _prompt_password("SSH passphrase: ")
+
     return User(name=username,
-                repo=f"ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
+                repo=f"git+ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
                 org=org)
 
 
@@ -934,6 +970,9 @@ def _authenticate_https(org, repo=None):
             child.sendline(f"password={password}")
             child.sendline("")
 
+        global AUTHENTICATION_METHOD
+        AUTHENTICATION_METHOD = "https"
+
         yield User(name=username,
                    repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
                    org=org)
@@ -961,35 +1000,37 @@ def _prompt_password(prompt="Password: "):
     password_bytes = []
     password_string = ""
 
-    with _no_echo_stdin():
-        while True:
-            # Read one byte
-            ch = sys.stdin.buffer.read(1)[0]
-            # If user presses Enter or ctrl-d
-            if ch in (ord("\r"), ord("\n"), 4):
-                print("\r")
-                break
-            # Del
-            elif ch == 127:
-                if len(password_string) > 0:
-                    print("\b \b", end="", flush=True)
-                # Remove last char and its corresponding bytes
-                password_string = password_string[:-1]
-                password_bytes = list(password_string.encode("utf8"))
-            # Ctrl-c
-            elif ch == 3:
-                print("^C", end="", flush=True)
-                raise KeyboardInterrupt
-            else:
-                password_bytes.append(ch)
+    # with _no_echo_stdin():
+    while True:
+        # Read one byte
+        ch = ord(_Getch()())
 
-                # If byte added concludes a utf8 char, print *
-                try:
-                    password_string = bytes(password_bytes).decode("utf8")
-                except UnicodeDecodeError:
-                    pass
-                else:
-                    print("*", end="", flush=True)
+        # ch = sys.stdin.buffer.read(1)[0]
+        # If user presses Enter or ctrl-d
+        if ch in (ord("\r"), ord("\n"), 4):
+            print("\r")
+            break
+        # Del
+        elif ch == 127:
+            if len(password_string) > 0:
+                print("\b \b", end="", flush=True)
+            # Remove last char and its corresponding bytes
+            password_string = password_string[:-1]
+            password_bytes = list(password_string.encode("utf8"))
+        # Ctrl-c
+        elif ch == 3:
+            print("^C", end="", flush=True)
+            raise KeyboardInterrupt
+        else:
+            password_bytes.append(ch)
+
+            # If byte added concludes a utf8 char, print *
+            try:
+                password_string = bytes(password_bytes).decode("utf8")
+            except UnicodeDecodeError:
+                pass
+            else:
+                print("*", end="", flush=True)
 
     if not password_string:
         print("Password cannot be empty, please try again.")
@@ -1006,7 +1047,7 @@ def _no_echo_stdin():
     """
     if os.name == "nt":
         import msvcrt
-        return msvcrt.getch()
+        yield msvcrt.getch()
     else:
         import tty, termios
         fd = sys.stdin.fileno()
@@ -1016,3 +1057,39 @@ def _no_echo_stdin():
             yield
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+class _Getch:
+    """Gets a single character from standard input.  Does not echo to the
+screen."""
+    def __init__(self):
+        try:
+            self.impl = _GetchWindows()
+        except ImportError:
+            self.impl = _GetchUnix()
+
+    def __call__(self): return self.impl()
+
+
+class _GetchUnix:
+    def __init__(self):
+        import tty, sys
+
+    def __call__(self):
+        import sys, tty, termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
+
+
+class _GetchWindows:
+    def __init__(self):
+        import msvcrt
+
+    def __call__(self):
+        import msvcrt
+        return msvcrt.getch()
