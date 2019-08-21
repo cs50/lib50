@@ -687,7 +687,7 @@ def _spawn(command, quiet=False, timeout=None):
             child.close()
         raise
     else:
-        is_alive = child.proc.poll() == None if os.name == "nt" else child.isAlive()
+        is_alive = child.proc.poll() == None if os.name == "nt" else child.isalive()
         if is_alive:
             try:
                 child.expect(pexpect.EOF, timeout=timeout)
