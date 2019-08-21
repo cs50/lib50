@@ -22,7 +22,6 @@ import tempfile
 import threading
 import time
 import functools
-from winpty import PtyProcess
 
 import attr
 import jellyfish
@@ -35,6 +34,9 @@ import yaml
 from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
+
+if os.name == "nt":
+    from winpty import PtyProcess
 
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
