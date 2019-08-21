@@ -520,6 +520,8 @@ class Git:
         git_command = f"git {' '.join(git._args)}"
         git_command = re.sub(' +', ' ', git_command)
 
+        print(git_command)
+
         # Format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.working_area]:
@@ -684,23 +686,24 @@ class _StreamToLogger:
 
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
-    # Spawn command
     if os.name == "nt":
+        # Spawn command
         child = PtyProcess.spawn(
             command,
             env=dict(os.environ)
         )
 
+        child.sendline = lambda line: child.write(line + "\n")
+
         try:
             if child.isalive() and PASSWORD:
-                # print(PASSWORD, len(PASSWORD))
-                child.write(PASSWORD)
+                child.sendline(PASSWORD)
             yield child
         except BaseException:
             del child
             raise
         else:
-            timeout = 5
+            timeout = timeout if timeout else 30
             start = time.time()
             while child.isalive() and time.time() < start + timeout:
                 time.sleep(.1)
@@ -712,8 +715,8 @@ def _spawn(command, quiet=False, timeout=None):
                 logger.debug("{} exited with {}".format(command, exitcode))
 
             print(exitcode)
-
     else:
+        # Spawn command
         child = pexpect.spawn(
             command,
             encoding="utf-8",
@@ -917,28 +920,30 @@ def _authenticate_https(org, repo=None):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
-        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = Git().set(Git.cache)
+        git = Git()
 
         # Get credentials from cache if possible
-        with _spawn(git("credential fill"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline("")
-            i = child.expect(["Username for '.+'", "Password for '.+'",
-                              "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
-            if i == 2:
-                username, password = child.match.groups()
-            else:
-                username = password = None
-                if os.name == "nt":
-                    child.kill(signal.SIGINT)
+        if os.name != "nt":
+            Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+            git = git.set(Git.cache)
+
+            with _spawn(git("credential fill"), quiet=True) as child:
+                child.sendline("protocol=https")
+                child.sendline("host=github.com")
+                child.sendline("")
+                i = child.expect(["Username for '.+'", "Password for '.+'",
+                                  "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
+                if i == 2:
+                    username, password = child.match.groups()
                 else:
-                    child.close()
-                child.exitstatus = 0
+                    username = password = None
+                    if os.name == "nt":
+                        child.kill(signal.SIGINT)
+                    else:
+                        child.close()
+                    child.exitstatus = 0
 
-
-        if password is None:
+        if os.name == "nt" or password is None:
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
 
@@ -961,17 +966,21 @@ def _authenticate_https(org, repo=None):
         # Especially if user logged in via email address
         username = res.json()["login"]
 
-        # Credentials are correct, best cache them
-        with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline(f"path={org}/{username}")
-            child.sendline(f"username={username}")
-            child.sendline(f"password={password}")
-            child.sendline("")
+        if os.name != "nt":
+            # Credentials are correct, best cache them
+            with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
+                child.sendline("protocol=https")
+                child.sendline("host=github.com")
+                child.sendline(f"path={org}/{username}")
+                child.sendline(f"username={username}")
+                child.sendline(f"password={password}")
+                child.sendline("")
 
         global AUTHENTICATION_METHOD
         AUTHENTICATION_METHOD = "https"
+
+        global PASSWORD
+        PASSWORD = password
 
         yield User(name=username,
                    repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
