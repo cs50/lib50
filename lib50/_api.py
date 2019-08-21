@@ -80,6 +80,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
         # Show any prompt if specified
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
+            print("==========================", commit_hash)
             return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
         else:
             raise Error(_("No files were submitted."))
@@ -749,9 +750,18 @@ def _spawn(command, quiet=False, timeout=None):
 
 def _run(command, quiet=False, timeout=None):
     """Run a command, returns command output."""
+    def escape_ansi(line):
+        ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
+        return ansi_escape.sub('', line)
+
     try:
         with _spawn(command, quiet, timeout) as child:
-            command_output = child.read().strip().replace("\r\n", "\n")
+            if os.name == "nt":
+                child.read()
+            try:
+                command_output = escape_ansi(child.read().replace("\r\n", "\n")).strip()
+            except EOFError:
+                command_output = ""
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
