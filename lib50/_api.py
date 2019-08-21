@@ -35,7 +35,9 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
-if os.name == "nt":
+ON_WINDOWS = os.name == "nt"
+
+if ON_WINDOWS:
     from winpty import PtyProcess
 
 __all__ = ["push", "local", "working_area", "files", "connect",
@@ -51,7 +53,7 @@ AUTH_URL = "https://submit.cs50.io"
 AUTHENTICATION_METHOD = ""
 PASSWORD = ""
 
-if os.name == "nt":
+if ON_WINDOWS:
     shlex.quote = lambda text: text
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
@@ -137,7 +139,7 @@ def working_area(files, name=""):
     yield dir
 
     # Ensure we have permission to cleanup tempdir on Windows
-    if os.name == "nt":
+    if ON_WINDOWS:
         for root, dirs, files in os.walk(str(dir)):
             for fname in files:
                 full_path = os.path.join(root, fname)
@@ -353,7 +355,7 @@ def upload(branch, user, tool, data):
         # Commit + push
         git = Git().set(Git.working_area)
 
-        if os.name == "nt":
+        if ON_WINDOWS:
             commit_message = commit_message.replace(" ", "_")
 
         _run(git("commit -m {msg} --allow-empty", msg=commit_message))
@@ -595,7 +597,7 @@ class Slug:
             cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
             try:
                 with _spawn(cmd, timeout=3) as child:
-                    if os.name == "nt":
+                    if ON_WINDOWS:
                         input = child.readline()
                         input = child.read()
                         def escape_ansi(line):
@@ -689,7 +691,7 @@ class _StreamToLogger:
 
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
-    if os.name == "nt":
+    if ON_WINDOWS:
         # Spawn command
         child = PtyProcess.spawn(
             command,
@@ -756,7 +758,7 @@ def _run(command, quiet=False, timeout=None):
 
     try:
         with _spawn(command, quiet, timeout) as child:
-            if os.name == "nt":
+            if ON_WINDOWS:
                 child.read()
             try:
                 command_output = escape_ansi(child.read().replace("\r\n", "\n")).strip()
@@ -883,7 +885,7 @@ def _lfs_add(files, git):
 
 def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
-    if os.name == "nt":
+    if ON_WINDOWS:
         # Ensure 64-bit Windows can find 32-bit Python under windows
         system32 = os.path.join(os.environ['SystemRoot'], 'SysNative' if platform.architecture()[0] == '32bit' else 'System32')
         ssh_path = os.path.join(system32, 'OpenSSH\\ssh.exe')
@@ -891,7 +893,7 @@ def _authenticate_ssh(org, repo=None):
         ssh_path = "ssh"
 
     # Require ssh-agent
-    if os.name == "nt":
+    if ON_WINDOWS:
         child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
     else:
         child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
@@ -905,7 +907,7 @@ def _authenticate_ssh(org, repo=None):
     except pexpect.TIMEOUT:
         return None
 
-    if os.name == "nt":
+    if ON_WINDOWS:
         child.kill(signal.SIGINT)
     else:
         child.close()
@@ -918,7 +920,7 @@ def _authenticate_ssh(org, repo=None):
     global AUTHENTICATION_METHOD
     AUTHENTICATION_METHOD = "ssh"
 
-    if os.name == "nt":
+    if ON_WINDOWS:
         global PASSWORD
         PASSWORD = _prompt_password("SSH passphrase: ")
 
@@ -935,7 +937,7 @@ def _authenticate_https(org, repo=None):
         git = Git()
 
         # Get credentials from cache if possible
-        if os.name != "nt":
+        if not ON_WINDOWS:
             Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
             git = git.set(Git.cache)
 
@@ -949,13 +951,13 @@ def _authenticate_https(org, repo=None):
                     username, password = child.match.groups()
                 else:
                     username = password = None
-                    if os.name == "nt":
+                    if ON_WINDOWS:
                         child.kill(signal.SIGINT)
                     else:
                         child.close()
                     child.exitstatus = 0
 
-        if os.name == "nt" or password is None:
+        if ON_WINDOWS or password is None:
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
 
@@ -978,7 +980,7 @@ def _authenticate_https(org, repo=None):
         # Especially if user logged in via email address
         username = res.json()["login"]
 
-        if os.name != "nt":
+        if not ON_WINDOWS:
             # Credentials are correct, best cache them
             with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
                 child.sendline("protocol=https")
@@ -1066,7 +1068,7 @@ def _no_echo_stdin():
     Have stdin not echo input.
     https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
     """
-    if os.name == "nt":
+    if ON_WINDOWS:
         import msvcrt
         yield msvcrt.getch()
     else:
