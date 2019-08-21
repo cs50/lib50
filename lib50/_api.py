@@ -8,6 +8,8 @@ import glob
 import itertools
 import logging
 import os
+import platform
+import signal
 from pathlib import Path
 import pkg_resources
 import re
@@ -15,16 +17,16 @@ import shutil
 import shlex
 import subprocess
 import sys
+import stat
 import tempfile
 import threading
-import termios
 import time
-import tty
 import functools
 
 import attr
 import jellyfish
 import pexpect
+from pexpect import popen_spawn
 import requests
 import termcolor
 import yaml
@@ -44,6 +46,8 @@ _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
+if os.name == "nt":
+    shlex.quote = lambda text: "\"{}\"".format(text)
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
@@ -124,6 +128,13 @@ def working_area(files, name=""):
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(f, dest)
         yield dir
+
+        # Ensure we have permission to cleanup tempdir on Windows
+        if os.name == "nt":
+            for root, dirs, files in os.walk(str(dir)):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    os.chmod(full_path ,stat.S_IWRITE)
 
 
 @contextlib.contextmanager
@@ -571,7 +582,10 @@ class Slug:
             cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
             try:
                 with _spawn(cmd, timeout=3) as child:
-                    output = child.read().strip().split("\r\n")
+                    if os.name == "nt":
+                        output = child.read().strip().split("\n")
+                    else:
+                        output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
                 if "Username for" in child.buffer:
                     return []
@@ -655,7 +669,7 @@ class _StreamToLogger:
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
     # Spawn command
-    child = pexpect.spawn(
+    child = popen_spawn.PopenSpawn(
         command,
         encoding="utf-8",
         env=dict(os.environ),
@@ -667,16 +681,27 @@ def _spawn(command, quiet=False, timeout=None):
             child.logfile_read = _StreamToLogger(logger.debug)
         yield child
     except BaseException:
-        child.close()
+        if os.name == "nt":
+            child.kill(signal.SIGINT)
+        else:
+            child.close()
         raise
     else:
-        if child.isalive():
+        is_alive = child.proc.poll() == None if os.name == "nt" else child.isAlive()
+        if is_alive:
             try:
                 child.expect(pexpect.EOF, timeout=timeout)
             except pexpect.TIMEOUT:
                 raise Error()
-        child.close(force=True)
-        if child.signalstatus is None and child.exitstatus != 0:
+
+        if os.name == "nt":
+            child.kill(signal.SIGINT)
+        else:
+            child.close(force=True)
+
+        exitcode = child.proc.returncode if os.name == "nt" else child.exitstatus
+
+        if child.signalstatus is None and child.proc.returncode != 0:
             logger.debug("{} exited with {}".format(command, child.exitstatus))
             raise Error()
 
@@ -723,8 +748,9 @@ def _match_files(universe, pattern):
 
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
-    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, str(filepath).replace("\\", "/"))
     r = requests.get(url)
+
     if not r.ok:
         if r.status_code == 404:
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
@@ -806,8 +832,16 @@ def _lfs_add(files, git):
 
 def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
+    if os.name == "nt":
+        # Ensure 64-bit Windows can find 32-bit Python under windows
+        system32 = os.path.join(os.environ['SystemRoot'], 'SysNative' if platform.architecture()[0] == '32bit' else 'System32')
+        ssh_path = os.path.join(system32, 'OpenSSH\\ssh.exe')
+    else:
+        ssh_path = "ssh"
+
     # Require ssh-agent
-    child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
+    child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         i = child.expect(["Hi (.+)! You've successfully authenticated",
@@ -817,8 +851,10 @@ def _authenticate_ssh(org, repo=None):
     except pexpect.TIMEOUT:
         return None
 
-
-    child.close()
+    if os.name == "nt":
+        child.kill(signal.SIGINT)
+    else:
+        child.close()
 
     if i == 0:
         username = child.match.groups()[0]
@@ -849,7 +885,10 @@ def _authenticate_https(org, repo=None):
                 username, password = child.match.groups()
             else:
                 username = password = None
-                child.close()
+                if os.name == "nt":
+                    child.kill(signal.SIGINT)
+                else:
+                    child.close()
                 child.exitstatus = 0
 
 
@@ -952,13 +991,18 @@ def _prompt_password(prompt="Password: "):
 @contextlib.contextmanager
 def _no_echo_stdin():
     """
-    On Unix only, have stdin not echo input.
+    Have stdin not echo input.
     https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
     """
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-    try:
-        yield
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if os.name == "nt":
+        import msvcrt
+        return msvcrt.getch()
+    else:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        tty.setraw(fd)
+        try:
+            yield
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
