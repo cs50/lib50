@@ -692,9 +692,11 @@ def _spawn(command, quiet=False, timeout=None):
             env=dict(os.environ)
         )
 
+        # Mimic pexpect process api
         child.sendline = lambda line: child.write(line + "\n")
 
         try:
+            # Preemptively feed user's password
             if child.isalive() and PASSWORD:
                 child.sendline(PASSWORD)
             yield child
@@ -702,16 +704,19 @@ def _spawn(command, quiet=False, timeout=None):
             del child
             raise
         else:
+            # Wait for process to finish gracefully
             timeout = timeout if timeout else 30
             start = time.time()
             while child.isalive() and time.time() < start + timeout:
                 time.sleep(.1)
 
-            exitcode = child.exitstatus
-            child.close(force=True)
+            # Get the exitstatus and force quit
+            exitstatus = child.exitstatus
+            del child
 
-            if exitcode != 0:
-                logger.debug("{} exited with {}".format(command, exitcode))
+            # Log any failed commands
+            if exitstatus != 0:
+                logger.debug("{} exited with {}".format(command, exitstatus))
     else:
         # Spawn command
         child = pexpect.spawn(
@@ -729,16 +734,19 @@ def _spawn(command, quiet=False, timeout=None):
             child.close()
             raise
         else:
+            # Wait for process to finish gracefully
             if child.isalive():
                 try:
                     child.expect(pexpect.EOF, timeout=timeout)
                 except pexpect.TIMEOUT:
                     raise Error()
 
+            # Get the exitstatus and force quit
             child.close(force=True)
-            exitcode = child.exitstatus
+            exitstatus = child.exitstatus
 
-            if child.signalstatus is None and exitcode != 0:
+            # Log any failed commands
+            if child.signalstatus is None and exitstatus != 0:
                 logger.debug("{} exited with {}".format(command, child.exitstatus))
 
 
@@ -1020,7 +1028,7 @@ def _prompt_password(prompt="Password: "):
     # with _no_echo_stdin():
     while True:
         # Read one byte
-        ch = ord(getch())
+        ch = getch()
 
         # If user presses Enter or ctrl-d
         if ch in (ord("\r"), ord("\n"), 4):
@@ -1089,4 +1097,4 @@ class _GetchWindows:
 
     def __call__(self):
         import msvcrt
-        return msvcrt.getch()
+        return ord(msvcrt.getch())
