@@ -894,6 +894,8 @@ def _authenticate_ssh(org, repo=None):
 
     # Require ssh-agent
     if ON_WINDOWS:
+        # -oBatchMode=yes prevents password prompt on OpenSSH
+        # https://serverfault.com/questions/61915/how-do-i-make-ssh-fail-rather-than-prompt-for-a-password-if-the-public-key-authe
         child = popen_spawn.PopenSpawn("{} -oBatchMode=yes -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
     else:
         child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
