@@ -274,7 +274,7 @@ def authenticate(org, repo=None):
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
         progress_bar.stop()
-        user = None if ON_WINDOWS else _authenticate_ssh(org, repo=repo)
+        user = _authenticate_ssh(org, repo=repo)
         if user is None:
             # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org, repo=repo) as user:
@@ -894,7 +894,7 @@ def _authenticate_ssh(org, repo=None):
 
     # Require ssh-agent
     if ON_WINDOWS:
-        child = popen_spawn.PopenSpawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+        child = popen_spawn.PopenSpawn("{} -oBatchMode=yes -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
     else:
         child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
 
@@ -919,10 +919,6 @@ def _authenticate_ssh(org, repo=None):
 
     global AUTHENTICATION_METHOD
     AUTHENTICATION_METHOD = "ssh"
-
-    if ON_WINDOWS:
-        global PASSWORD
-        PASSWORD = _prompt_password("SSH passphrase: ")
 
     return User(name=username,
                 repo=f"git+ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
