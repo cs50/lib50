@@ -82,7 +82,6 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
         # Show any prompt if specified
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
-            print("==========================", commit_hash)
             return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
         else:
             raise Error(_("No files were submitted."))
@@ -127,23 +126,22 @@ def working_area(files, name=""):
     Optionally names the working area name
     Returns path to the working area
     """
-    # with tempfile.TemporaryDirectory() as dir:
-    dir = "qux"
-    dir = Path(Path(dir) / name).absolute()
-    dir.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory() as dir:
+        dir = Path(Path(dir) / name).absolute()
+        dir.mkdir(exist_ok=True)
 
-    for f in files:
-        dest = (dir / f).absolute()
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(f, dest)
-    yield dir
+        for f in files:
+            dest = (dir / f).absolute()
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(f, dest)
+        yield dir
 
-    # Ensure we have permission to cleanup tempdir on Windows
-    if ON_WINDOWS:
-        for root, dirs, files in os.walk(str(dir)):
-            for fname in files:
-                full_path = os.path.join(root, fname)
-                os.chmod(full_path ,stat.S_IWRITE)
+        # Ensure we have permission to cleanup tempdir on Windows
+        if ON_WINDOWS:
+            for root, dirs, files in os.walk(str(dir)):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    os.chmod(full_path ,stat.S_IWRITE)
 
 
 @contextlib.contextmanager
@@ -275,8 +273,8 @@ def authenticate(org, repo=None):
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org, repo=repo)
         progress_bar.stop()
+        user = None if ON_WINDOWS else _authenticate_ssh(org, repo=repo)
         if user is None:
             # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org, repo=repo) as user:
@@ -525,8 +523,6 @@ class Git:
         git_command = f"git {' '.join(git._args)}"
         git_command = re.sub(' +', ' ', git_command)
 
-        print(git_command)
-
         # Format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.working_area]:
@@ -612,8 +608,6 @@ class Slug:
                     return []
                 else:
                     raise TimeoutError(3)
-
-        print([line.split()[1].replace("refs/heads/", "") for line in output])
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
@@ -718,8 +712,6 @@ def _spawn(command, quiet=False, timeout=None):
 
             if exitcode != 0:
                 logger.debug("{} exited with {}".format(command, exitcode))
-
-            print(exitcode)
     else:
         # Spawn command
         child = pexpect.spawn(
@@ -1023,18 +1015,19 @@ def _prompt_password(prompt="Password: "):
     password_bytes = []
     password_string = ""
 
+    getch = _Getch()
+
     # with _no_echo_stdin():
     while True:
         # Read one byte
-        ch = ord(_Getch()())
+        ch = ord(getch())
 
-        # ch = sys.stdin.buffer.read(1)[0]
         # If user presses Enter or ctrl-d
         if ch in (ord("\r"), ord("\n"), 4):
             print("\r")
             break
         # Del
-        elif ch == 127:
+        elif ch == 127 or ch == 8:
             if len(password_string) > 0:
                 print("\b \b", end="", flush=True)
             # Remove last char and its corresponding bytes
@@ -1061,25 +1054,6 @@ def _prompt_password(prompt="Password: "):
 
     return password_string
 
-
-@contextlib.contextmanager
-def _no_echo_stdin():
-    """
-    Have stdin not echo input.
-    https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
-    """
-    if ON_WINDOWS:
-        import msvcrt
-        yield msvcrt.getch()
-    else:
-        import tty, termios
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        tty.setraw(fd)
-        try:
-            yield
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 class _Getch:
     """Gets a single character from standard input.  Does not echo to the
