@@ -40,7 +40,8 @@ if ON_WINDOWS:
     from pexpect import popen_spawn
     quote = lambda text: text
 else:
-    import termios, tty
+    import termios
+    import tty
     quote = __import__("shlex").quote
 
 __all__ = ["push", "local", "working_area", "files", "connect",
