@@ -36,6 +36,7 @@ from . import config as lib50_config
 ON_WINDOWS = os.name == "nt"
 
 if ON_WINDOWS:
+    import msvcrt
     from winpty import PtyProcess
     from pexpect import popen_spawn
     quote = lambda text: text
@@ -297,7 +298,7 @@ def prepare(tool, branch, user, included):
         git = Git().set(Git.working_area)
         # Clone just .git folder
         try:
-            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo), password=PASSWORD)
         except Error:
             msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
@@ -356,7 +357,7 @@ def upload(branch, user, tool, data):
             commit_message = commit_message.replace(" ", "_")
 
         _run(git("commit -m {msg} --allow-empty", msg=commit_message))
-        _run(git.set(Git.cache)("push origin {branch}", branch=branch))
+        _run(git.set(Git.cache)("push origin {branch}", branch=branch), password=PASSWORD)
         commit_hash = _run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
@@ -680,7 +681,7 @@ class _StreamToLogger:
 
 if ON_WINDOWS:
     @contextlib.contextmanager
-    def _spawn(command, quiet=False, timeout=None):
+    def _spawn(command, quiet=False, timeout=None, password=None):
         # Spawn command
         child = PtyProcess.spawn(
             command,
@@ -692,8 +693,8 @@ if ON_WINDOWS:
 
         try:
             # Preemptively feed user's password
-            if child.isalive() and PASSWORD:
-                child.sendline(PASSWORD)
+            if child.isalive() and password is not None:
+                child.sendline(password)
             yield child
         except BaseException:
             del child
@@ -715,7 +716,7 @@ if ON_WINDOWS:
 
 else:
     @contextlib.contextmanager
-    def _spawn(command, quiet=False, timeout=None):
+    def _spawn(command, quiet=False, timeout=None, password=None):
         # Spawn command
         child = pexpect.spawn(
             command,
@@ -748,10 +749,10 @@ else:
                 logger.debug("{} exited with {}".format(command, child.exitstatus))
 
 
-def _run(command, quiet=False, timeout=None):
+def _run(command, quiet=False, timeout=None, password=None):
     """Run a command, returns command output."""
     try:
-        with _spawn(command, quiet, timeout) as child:
+        with _spawn(command, quiet, timeout, password) as child:
             if ON_WINDOWS:
                 child.read()
             try:
@@ -1056,10 +1057,7 @@ class _Getch:
     """Gets a single character from standard input.  Does not echo to the
 screen."""
     def __init__(self):
-        try:
-            self.impl = _GetchWindows()
-        except ImportError:
-            self.impl = _GetchUnix()
+        self.impl = (_GetchWindows if ON_WINDOWS else _GetchUnix)()
 
     def __call__(self):
         return self.impl()
@@ -1071,18 +1069,13 @@ class _GetchUnix:
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(sys.stdin.fileno())
-            ch = sys.stdin.read(1)
+            return ord(sys.stdin.buffer.read(1))
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
 
 
 class _GetchWindows:
-    def __init__(self):
-        import msvcrt
-
     def __call__(self):
-        import msvcrt
         return ord(msvcrt.getch())
 
 
