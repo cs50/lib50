@@ -3,6 +3,7 @@ import contextlib
 import copy
 import datetime
 import fnmatch
+import functools
 import gettext
 import glob
 import itertools
@@ -14,19 +15,16 @@ from pathlib import Path
 import pkg_resources
 import re
 import shutil
-import shlex
 import subprocess
 import sys
 import stat
 import tempfile
 import threading
 import time
-import functools
 
 import attr
 import jellyfish
 import pexpect
-from pexpect import popen_spawn
 import requests
 import termcolor
 import yaml
@@ -39,6 +37,10 @@ ON_WINDOWS = os.name == "nt"
 
 if ON_WINDOWS:
     from winpty import PtyProcess
+    from pexpect import popen_spawn
+    quote = lambda text: text
+else:
+    quote = __import__("shlex").quote
 
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
@@ -50,11 +52,7 @@ logger.addHandler(logging.NullHandler())
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
-AUTHENTICATION_METHOD = ""
 PASSWORD = ""
-
-if ON_WINDOWS:
-    shlex.quote = lambda text: text
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
@@ -141,7 +139,7 @@ def working_area(files, name=""):
             for root, dirs, files in os.walk(str(dir)):
                 for fname in files:
                     full_path = os.path.join(root, fname)
-                    os.chmod(full_path ,stat.S_IWRITE)
+                    os.chmod(full_path, stat.S_IWRITE)
 
 
 @contextlib.contextmanager
@@ -294,7 +292,7 @@ def prepare(tool, branch, user, included):
     Check that atleast one file is staged
     """
     with ProgressBar(_("Preparing")) as progress_bar, working_area(included) as area:
-        Git.working_area = f"-C {shlex.quote(str(area))}"
+        Git.working_area = f"-C {quote(str(area))}"
         git = Git().set(Git.working_area)
         # Clone just .git folder
         try:
@@ -324,7 +322,7 @@ def prepare(tool, branch, user, included):
         _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
         # Git add all included files
-        _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+        _run(git(f"add -f {' '.join(quote(f) for f in included)}"))
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -510,7 +508,7 @@ class Git:
 
     def set(self, git_arg, **format_args):
         """git = Git().set("-C {folder}", folder="foo")"""
-        format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
+        format_args = {name: quote(arg) for name, arg in format_args.items()}
         git = Git()
         git._args = self._args[:]
         git._args.append(git_arg.format(**format_args))
@@ -588,19 +586,15 @@ class Slug:
         """Get branches from org/repo."""
         if self.offline:
             local_path = get_local_path() / self.org / self.repo
-            output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
+            output = _run(f"git -C {quote(str(local_path))} show-ref --heads").split("\n")
         else:
             cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
             try:
                 with _spawn(cmd, timeout=3) as child:
                     if ON_WINDOWS:
-                        input = child.readline()
-                        input = child.read()
-                        def escape_ansi(line):
-                            ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
-                            return ansi_escape.sub('', line)
-                        input = escape_ansi(input)
-                        output = input.strip().split("\r\n")
+                        # Ignore first line
+                        child.readline()
+                        output = _escape_ansi(child.read()).split("\r\n")
                     else:
                         output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
@@ -683,9 +677,9 @@ class _StreamToLogger:
         pass
 
 
-@contextlib.contextmanager
-def _spawn(command, quiet=False, timeout=None):
-    if ON_WINDOWS:
+if ON_WINDOWS:
+    @contextlib.contextmanager
+    def _spawn(command, quiet=False, timeout=None):
         # Spawn command
         child = PtyProcess.spawn(
             command,
@@ -717,7 +711,10 @@ def _spawn(command, quiet=False, timeout=None):
             # Log any failed commands
             if exitstatus != 0:
                 logger.debug("{} exited with {}".format(command, exitstatus))
-    else:
+
+else:
+    @contextlib.contextmanager
+    def _spawn(command, quiet=False, timeout=None):
         # Spawn command
         child = pexpect.spawn(
             command,
@@ -752,16 +749,12 @@ def _spawn(command, quiet=False, timeout=None):
 
 def _run(command, quiet=False, timeout=None):
     """Run a command, returns command output."""
-    def escape_ansi(line):
-        ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
-        return ansi_escape.sub('', line)
-
     try:
         with _spawn(command, quiet, timeout) as child:
             if ON_WINDOWS:
                 child.read()
             try:
-                command_output = escape_ansi(child.read().replace("\r\n", "\n")).strip()
+                command_output = _escape_ansi(child.read().replace("\r\n", "\n")).strip()
             except EOFError:
                 command_output = ""
     except pexpect.TIMEOUT:
@@ -889,16 +882,14 @@ def _authenticate_ssh(org, repo=None):
         # Ensure 64-bit Windows can find 32-bit Python under windows
         system32 = os.path.join(os.environ['SystemRoot'], 'SysNative' if platform.architecture()[0] == '32bit' else 'System32')
         ssh_path = os.path.join(system32, 'OpenSSH\\ssh.exe')
+        pexpect_spawn = popen_spawn.PopenSpawn
     else:
+        pexpect_spawn = pexpect.spawn
         ssh_path = "ssh"
 
-    # Require ssh-agent
-    if ON_WINDOWS:
-        # -oBatchMode=yes prevents password prompt on OpenSSH
-        # https://serverfault.com/questions/61915/how-do-i-make-ssh-fail-rather-than-prompt-for-a-password-if-the-public-key-authe
-        child = popen_spawn.PopenSpawn("{} -oBatchMode=yes -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
-    else:
-        child = pexpect.spawn("{} -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+    # -oBatchMode=yes prevents password prompt on OpenSSH
+    # https://serverfault.com/questions/61915/how-do-i-make-ssh-fail-rather-than-prompt-for-a-password-if-the-public-key-authe
+    child = pexpect_spawn("{} -oBatchMode=yes -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
 
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
@@ -919,8 +910,6 @@ def _authenticate_ssh(org, repo=None):
     else:
         return None
 
-    global AUTHENTICATION_METHOD
-    AUTHENTICATION_METHOD = "ssh"
 
     return User(name=username,
                 repo=f"git+ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
@@ -987,9 +976,6 @@ def _authenticate_https(org, repo=None):
                 child.sendline(f"username={username}")
                 child.sendline(f"password={password}")
                 child.sendline("")
-
-        global AUTHENTICATION_METHOD
-        AUTHENTICATION_METHOD = "https"
 
         global PASSWORD
         PASSWORD = password
@@ -1096,3 +1082,8 @@ class _GetchWindows:
     def __call__(self):
         import msvcrt
         return ord(msvcrt.getch())
+
+
+def _escape_ansi(line):
+    ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
+    return ansi_escape.sub('', line)
