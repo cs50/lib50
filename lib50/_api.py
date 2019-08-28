@@ -943,10 +943,7 @@ def _authenticate_https(org, repo=None):
                     username, password = child.match.groups()
                 else:
                     username = password = None
-                    if ON_WINDOWS:
-                        child.kill(signal.SIGINT)
-                    else:
-                        child.close()
+                    child.close()
                     child.exitstatus = 0
 
         if ON_WINDOWS or password is None:
