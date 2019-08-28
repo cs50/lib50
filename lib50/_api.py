@@ -344,9 +344,9 @@ def upload(branch, user, tool, data):
     with ProgressBar(_("Uploading")):
         commit_message = _("automated commit by {}").format(tool)
 
-        data_str = " ".join(f"[{key}={val}]" for key, val in data.items())
+        data_str = " ".join(itertools.chain([""], (f"[{key}={val}]" for key, val in data.items())))
 
-        commit_message = f"{commit_message} {data_str}"
+        commit_message = f"{commit_message}{data_str}"
 
         # Commit + push
         git = Git().set(Git.working_area)
@@ -794,7 +794,7 @@ def _match_files(universe, pattern):
 
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
-    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, str(filepath).replace("\\", "/"))
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, "/".join(Path(filepath).parts))
     r = requests.get(url)
 
     if not r.ok:
