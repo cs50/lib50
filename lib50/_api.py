@@ -1010,10 +1010,14 @@ def _prompt_username(prompt="Username: "):
 def _prompt_password(prompt="Password: "):
     """Prompt the user for password, printing asterisks for each character"""
     print(prompt, end="", flush=True)
-    password_bytes = []
-    password_string = ""
+
+    # List of UTF-8 chars in the password
+    password = []
+    # buffer containing the bytes of the char currently being read
+    char_buffer = []
 
     getch = _Getch()
+
 
     # with _no_echo_stdin():
     while True:
@@ -1026,31 +1030,35 @@ def _prompt_password(prompt="Password: "):
             break
         # Del
         elif ch == 127 or ch == 8:
-            if len(password_string) > 0:
+            if len(password) > 0:
                 print("\b \b", end="", flush=True)
             # Remove last char and its corresponding bytes
-            password_string = password_string[:-1]
-            password_bytes = list(password_string.encode("utf8"))
+            password.pop()
         # Ctrl-c
         elif ch == 3:
             print("^C", end="", flush=True)
             raise KeyboardInterrupt
         else:
-            password_bytes.append(ch)
+            char_buffer.append(ch)
+            # UTF-8 characters cannot be longer than 4 bytes
+            if len(char_buffer) > 4:
+                raise Error(_("Invalid characters detected in password"))
 
-            # If byte added concludes a utf8 char, print *
             try:
-                password_string = bytes(password_bytes).decode("utf8")
+                char = bytes(char_buffer).decode("utf8")
             except UnicodeDecodeError:
                 pass
             else:
+                password.append(char)
+                char_buffer.clear()
                 print("*", end="", flush=True)
 
-    if not password_string:
+
+    if not password:
         print("Password cannot be empty, please try again.")
         return _prompt_password(prompt)
 
-    return password_string
+    return "".join(password)
 
 
 class _Getch:
