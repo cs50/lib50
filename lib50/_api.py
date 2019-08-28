@@ -681,7 +681,7 @@ class _StreamToLogger:
 
 if ON_WINDOWS:
     @contextlib.contextmanager
-    def _spawn(command, quiet=False, timeout=None, password=None):
+    def _spawn(command, quiet=False, timeout=30, password=None):
         # Spawn command
         child = PtyProcess.spawn(
             command,
@@ -698,7 +698,6 @@ if ON_WINDOWS:
             raise
         else:
             # Wait for process to finish gracefully
-            timeout = timeout if timeout else 30
             start = time.time()
             while child.isalive() and time.time() < start + timeout:
                 time.sleep(.1)
