@@ -1030,7 +1030,7 @@ def _prompt_password(prompt="Password: "):
             break
         # Del
         elif ch == 127 or ch == 8:
-            if len(password) > 0:
+            if password:
                 print("\b \b", end="", flush=True)
             # Remove last char and its corresponding bytes
             password.pop()
