@@ -1042,7 +1042,7 @@ def _prompt_password(prompt="Password: "):
             char_buffer.append(ch)
             # UTF-8 characters cannot be longer than 4 bytes
             if len(char_buffer) > 4:
-                raise Error(_("Invalid characters detected in password"))
+                raise Error(_("Invalid UTF-8 characters in password"))
 
             try:
                 char = bytes(char_buffer).decode("utf8")
