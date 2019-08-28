@@ -688,13 +688,10 @@ if ON_WINDOWS:
             env=dict(os.environ)
         )
 
-        # Mimic pexpect process api
-        child.sendline = lambda line: child.write(line + "\n")
-
         try:
             # Preemptively feed user's password
             if child.isalive() and password is not None:
-                child.sendline(password)
+                child.write(f"{password}\n")
             yield child
         except BaseException:
             del child
