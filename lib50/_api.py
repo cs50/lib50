@@ -1038,7 +1038,7 @@ def _prompt_password(prompt="Password: "):
             char_buffer.append(ch)
             # UTF-8 characters cannot be longer than 4 bytes
             if len(char_buffer) > 4:
-                raise Error(_("Invalid UTF-8 characters in password"))
+                raise Error(_("Invalid UTF-8 character(s) in password"))
 
             try:
                 char = bytes(char_buffer).decode("utf8")
@@ -1049,6 +1049,10 @@ def _prompt_password(prompt="Password: "):
                 char_buffer.clear()
                 print("*", end="", flush=True)
 
+
+    # If there are still bytes in the char buffer, it must be invalid UTF-8
+    if char_buffer:
+        raise Error(_("Invalid UTF-8 character(s) in password"))
 
     if not password:
         print("Password cannot be empty, please try again.")
