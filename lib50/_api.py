@@ -53,7 +53,6 @@ logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
-AUTH_URL = "https://submit.cs50.io"
 PASSWORD = ""
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
@@ -304,7 +303,7 @@ def prepare(tool, branch, user, included):
             if user.org != DEFAULT_PUSH_ORG:
                 msg += _("Please contact your instructor about this issue.")
             else:
-                msg += _("Please go to {} in your web browser and try again.").format(AUTH_URL)
+                msg += _("Please go to https://submit.cs50.io in your web browser and try again.")
 
             raise Error(msg)
 
