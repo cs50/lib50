@@ -40,6 +40,7 @@ if ON_WINDOWS:
     from pexpect import popen_spawn
     quote = lambda text: text
 else:
+    import termios,, tty
     quote = __import__("shlex").quote
 
 __all__ = ["push", "local", "working_area", "files", "connect",
@@ -1072,7 +1073,6 @@ class _GetchUnix:
         import tty, sys
 
     def __call__(self):
-        import sys, tty, termios
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
