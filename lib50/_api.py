@@ -910,9 +910,12 @@ def _authenticate_ssh(org, repo=None):
     else:
         return None
 
+    # if repo is unspecified, default to usernae
+    if repo is None:
+        repo = username
 
     return User(name=username,
-                repo=f"git+ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
+                repo=f"git+ssh://git@ssh.github.com:443/{org}/{repo}",
                 org=org)
 
 
@@ -967,6 +970,10 @@ def _authenticate_https(org, repo=None):
         # Especially if user logged in via email address
         username = res.json()["login"]
 
+        # If repo is unspecified, default to username
+        if repo is None:
+            repo = username
+
         if not ON_WINDOWS:
             # Credentials are correct, best cache them
             with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
@@ -981,7 +988,7 @@ def _authenticate_https(org, repo=None):
         PASSWORD = password
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
+                   repo=f"https://{username}@github.com/{org}/{repo}",
                    org=org)
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.
