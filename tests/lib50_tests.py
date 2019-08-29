@@ -348,6 +348,14 @@ class TestFiles(unittest.TestCase):
             self.assertEqual(included, set())
             self.assertEqual(excluded, {"?("})
 
+    def test_space_in_name(self):
+        open("foo bar", "w").close()
+        open("baz", "w").close()
+
+        included, excluded = lib50.files({})
+        self.assertEqual(included, {"foo bar", "baz"})
+        self.assertEqual(excluded, set())
+
     def test_from_root(self):
         os.mkdir("foo")
         os.mkdir("foo/bar")

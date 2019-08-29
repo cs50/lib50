@@ -30,15 +30,15 @@ class TestGit(unittest.TestCase):
         lib50._api.logger.debug = self.old_debug
 
     def test_no_args(self):
-        self.assertEqual(lib50._api.Git()("foo"), "git foo")
+        self.assertEqual(lib50._api.Git()("foo"), ["git", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
 
     def test_arg(self):
-        self.assertEqual(lib50._api.Git().set("bar")("foo"), "git bar foo")
+        self.assertEqual(lib50._api.Git().set("bar")("foo"), ["git", "bar", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git bar foo", attrs=["bold"])])
 
     def test_args(self):
-        self.assertEqual(lib50._api.Git().set("baz")("foo"), "git baz foo")
+        self.assertEqual(lib50._api.Git().set("baz")("foo"), ["git", "baz", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git baz foo", attrs=["bold"])])
 
     def test_special_args_not_set(self):
@@ -47,7 +47,7 @@ class TestGit(unittest.TestCase):
             lib50._api.Git.git_dir = "baz"
             lib50._api.Git.cache = "qux"
 
-            self.assertEqual(lib50._api.Git()("foo"), "git foo")
+            self.assertEqual(lib50._api.Git()("foo"), ["git", "foo"])
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
         finally:
             lib50._api.Git.work_tree = ""
@@ -56,11 +56,11 @@ class TestGit(unittest.TestCase):
 
     def test_special_args(self):
         try:
-            lib50._api.Git.working_area = "bar"
-            lib50._api.Git.cache = "baz"
+            lib50._api.Git.working_area = ["bar"]
+            lib50._api.Git.cache = ["baz"]
 
-            git = lib50._api.Git().set(lib50._api.Git.working_area).set(lib50._api.Git.cache)
-            self.assertEqual(git("foo"), "git bar baz foo")
+            git = lib50._api.Git().set(*lib50._api.Git.working_area).set(*lib50._api.Git.cache)
+            self.assertEqual(git("foo"), ["git", "bar", "baz", "foo"])
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
         finally:
             lib50._api.Git.working_area = ""
@@ -83,7 +83,7 @@ class TestSlug(unittest.TestCase):
     def test_case(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
             lib50._api.Slug("cs50/lib50/TESTS/bar")
-        self.assertEquals(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
+        self.assertEqual(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
 
     def test_online(self):
         if os.environ.get("TRAVIS") == "true":
@@ -173,34 +173,25 @@ class TestProgressBar(unittest.TestCase):
 
 class TestPromptPassword(unittest.TestCase):
     @contextlib.contextmanager
-    def replace_stdin(self):
-        old = sys.stdin
-        try:
-            with tempfile.TemporaryFile() as stdin_f:
-                sys.stdin = stdin_f
-                sys.stdin.buffer = sys.stdin
-                yield sys.stdin
-        finally:
-            sys.stdin = old
-
-    @contextlib.contextmanager
-    def mock_no_echo_stdin(self):
-        @contextlib.contextmanager
+    def mock_Getch(self, input):
         def mock():
-            yield
+            index = -1
+            def getch():
+                nonlocal index
+                index += 1
+                return input[index]
+            return getch
 
-        old = lib50._api._no_echo_stdin
+        old = lib50._api._Getch
         try:
-            lib50._api._no_echo_stdin = mock
+            lib50._api._Getch = mock
             yield mock
         finally:
-            lib50._api._no_echo_stdin = old
+            lib50._api._Getch = old
 
     def test_ascii(self):
         f = io.StringIO()
-        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
-            sys.stdin.write(bytes("foo\n".encode("utf8")))
-            sys.stdin.seek(0)
+        with self.mock_Getch(bytes("foo\n".encode("utf8"))), contextlib.redirect_stdout(f):
             password = lib50._api._prompt_password()
 
         self.assertEqual(password, "foo")
@@ -208,9 +199,7 @@ class TestPromptPassword(unittest.TestCase):
 
     def test_unicode(self):
         f = io.StringIO()
-        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
-            sys.stdin.write(bytes("↔♣¾€\n".encode("utf8")))
-            sys.stdin.seek(0)
+        with self.mock_Getch(bytes("↔♣¾€\n".encode("utf8"))), contextlib.redirect_stdout(f):
             password = lib50._api._prompt_password()
 
         self.assertEqual(password, "↔♣¾€")
@@ -225,9 +214,7 @@ class TestPromptPassword(unittest.TestCase):
                 str = temp
 
         f = io.StringIO()
-        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
-            sys.stdin.write(bytes(f"↔{chr(127)}♣¾{chr(127)}€\n".encode("utf8")))
-            sys.stdin.seek(0)
+        with self.mock_Getch(bytes(f"↔{chr(127)}♣¾{chr(127)}€\n".encode("utf8"))), contextlib.redirect_stdout(f):
             password = lib50._api._prompt_password()
 
         self.assertEqual(password, "♣€")

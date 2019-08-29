@@ -3,24 +3,25 @@ import contextlib
 import copy
 import datetime
 import fnmatch
+import functools
 import gettext
 import glob
 import itertools
 import logging
 import os
+import platform
 from pathlib import Path
 import pkg_resources
 import re
-import shutil
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
+import stat
 import tempfile
 import threading
-import termios
 import time
-import tty
-import functools
 
 import attr
 import jellyfish
@@ -33,6 +34,16 @@ from . import _, get_local_path
 from ._errors import *
 from . import config as lib50_config
 
+ON_WINDOWS = os.name == "nt"
+
+if ON_WINDOWS:
+    import msvcrt
+    from winpty import PtyProcess
+    from pexpect import popen_spawn
+else:
+    import termios
+    import tty
+
 __all__ = ["push", "local", "working_area", "files", "connect",
            "prepare", "authenticate", "upload", "logout", "ProgressBar",
            "fetch_config", "get_local_slugs", "check_github_status", "Slug", "cd"]
@@ -42,8 +53,7 @@ logger.addHandler(logging.NullHandler())
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
-AUTH_URL = "https://submit.cs50.io"
-
+PASSWORD = ""
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
     """
@@ -87,18 +97,19 @@ def local(slug, offline=False):
 
     local_path = get_local_path() / slug.org / slug.repo
 
-    git = Git().set("-C {path}", path=str(local_path))
+    Git.working_area = ["-C", str(local_path)]
+    git = Git().set(*Git.working_area)
     if not local_path.exists():
-        _run(Git()("init {path}", path=str(local_path)))
-        _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
+        _run(Git()("init",  str(local_path)))
+        _run(git("remote", "add", "origin", f"https://github.com/{slug.org}/{slug.repo}"))
 
     if not offline:
         # Get latest version of checks
-        _run(git("fetch origin {branch}", branch=slug.branch))
+        _run(git("fetch", "origin", slug.branch, "--depth", "1"))
 
     # Ensure that local copy of the repo is identical to remote copy
-    _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
-    _run(git("reset --hard HEAD"))
+    _run(git("checkout", "-f", "-B", slug.branch, f"origin/{slug.branch}"))
+    _run(git("reset", "--hard", "HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -116,7 +127,7 @@ def working_area(files, name=""):
     Returns path to the working area
     """
     with tempfile.TemporaryDirectory() as dir:
-        dir = Path(Path(dir) / name)
+        dir = Path(Path(dir) / name).absolute()
         dir.mkdir(exist_ok=True)
 
         for f in files:
@@ -125,6 +136,12 @@ def working_area(files, name=""):
             shutil.copy(f, dest)
         yield dir
 
+        # Ensure we have permission to cleanup tempdir on Windows
+        if ON_WINDOWS:
+            for root, dirs, files in os.walk(str(dir)):
+                for fname in files:
+                    full_path = os.path.join(root, fname)
+                    os.chmod(full_path, stat.S_IWRITE)
 
 @contextlib.contextmanager
 def cd(dest):
@@ -255,8 +272,8 @@ def authenticate(org, repo=None):
     Returns an authenticated User
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org, repo=repo)
         progress_bar.stop()
+        user = _authenticate_ssh(org, repo=repo)
         if user is None:
             # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org, repo=repo) as user:
@@ -276,37 +293,36 @@ def prepare(tool, branch, user, included):
     Check that atleast one file is staged
     """
     with ProgressBar(_("Preparing")) as progress_bar, working_area(included) as area:
-        Git.working_area = f"-C {shlex.quote(str(area))}"
-        git = Git().set(Git.working_area)
+        Git.working_area = ["-C", str(area)]
+        git = Git().set(*Git.working_area)
         # Clone just .git folder
         try:
-            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+            _run(git.set(*Git.cache)("clone", "--bare", user.repo, ".git", "--depth", "1"), password=PASSWORD)
         except Error:
             msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
             if user.org != DEFAULT_PUSH_ORG:
                 msg += _("Please contact your instructor about this issue.")
             else:
-                msg += _("Please go to {} in your web browser and try again.").format(AUTH_URL)
+                msg += _("Please go to https://submit.cs50.io in your web browser and try again.")
 
             raise Error(msg)
 
-        _run(git("config --bool core.bare false"))
-        _run(git("config --path core.worktree {area}", area=str(area)))
+        _run(git("config", "--bool", "core.bare", "false"))
+        _run(git("config", "--path", "core.worktree", str(area)))
 
         try:
-            _run(git("checkout --force {branch} .gitattributes", branch=branch))
+            _run(git("checkout", "--force", branch, ".gitattributes"))
         except Error:
             pass
 
         # Set user name/email in repo config
-        _run(git("config user.email {email}", email=user.email))
-        _run(git("config user.name {name}", name=user.name))
+        _run(git("config", "user.email", user.email))
+        _run(git("config", "user.name", user.name))
 
         # Switch to branch without checkout
-        _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
+        _run(git("symbolic-ref", "HEAD", f"refs/heads/{branch}"))
 
-        # Git add all included files
-        _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+        _run(git("add", "-f", *included))
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -328,15 +344,19 @@ def upload(branch, user, tool, data):
     with ProgressBar(_("Uploading")):
         commit_message = _("automated commit by {}").format(tool)
 
-        data_str = " ".join(f"[{key}={val}]" for key, val in data.items())
+        data_str = " ".join(itertools.chain([""], (f"[{key}={val}]" for key, val in data.items())))
 
-        commit_message = f"{commit_message} {data_str}"
+        commit_message = f"{commit_message}{data_str}"
 
         # Commit + push
-        git = Git().set(Git.working_area)
-        _run(git("commit -m {msg} --allow-empty", msg=commit_message))
-        _run(git.set(Git.cache)("push origin {branch}", branch=branch))
-        commit_hash = _run(git("rev-parse HEAD"))
+        git = Git().set(*Git.working_area)
+
+        if ON_WINDOWS:
+            commit_message = commit_message.replace(" ", "_")
+
+        _run(git("commit", "-m", commit_message, "--allow-empty"))
+        _run(git.set(*Git.cache)("push", "origin", branch), password=PASSWORD)
+        commit_hash = _run(git("rev-parse", "HEAD"))
         return user.name, commit_hash
 
 
@@ -415,8 +435,8 @@ def get_local_slugs(tool, similar_to=""):
     for path in valid_paths:
         org, repo = path.parts[0:2]
         if (org, repo) not in branch_map:
-            git = Git().set("-C {path}", path=str(local_path / path.parent))
-            branch = _run(git("rev-parse --abbrev-ref HEAD"))
+            git = Git().set("-C", str(local_path / path.parent))
+            branch = _run(git("rev-parse", "--abbrev-ref", "HEAD"))
             branch_map[(org, repo)] = branch
 
     # Reconstruct slugs for each config file
@@ -466,7 +486,7 @@ def check_dependencies():
 
 
 def logout():
-    _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
+    _run("git", "credential-cache", "--socket", _CREDENTIAL_SOCKET, "exit")
 
 
 @attr.s(slots=True)
@@ -486,25 +506,22 @@ class Git:
     def __init__(self):
         self._args = []
 
-    def set(self, git_arg, **format_args):
+    def set(self, *args):
         """git = Git().set("-C {folder}", folder="foo")"""
-        format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
         git = Git()
-        git._args = self._args[:]
-        git._args.append(git_arg.format(**format_args))
+        git._args = self._args + list(args)
         return git
 
-    def __call__(self, command, **format_args):
-        """Git()("git clone {repo}", repo="foo")"""
-        git = self.set(command, **format_args)
+    def __call__(self, *args):
+        """Git()("git", "clone", repo)"""
+        git = self.set(*args)
 
-        git_command = f"git {' '.join(git._args)}"
-        git_command = re.sub(' +', ' ', git_command)
+        git_command = ["git"] + git._args
 
         # Format to show in git info
-        logged_command = git_command
+        logged_command = " ".join(shlex.quote(arg) for arg in git_command)
         for opt in [Git.cache, Git.working_area]:
-            logged_command = logged_command.replace(str(opt), "")
+            logged_command = logged_command.replace(" ".join(opt), "")
         logged_command = re.sub(' +', ' ', logged_command)
 
         # Log pretty command in info
@@ -566,12 +583,18 @@ class Slug:
         """Get branches from org/repo."""
         if self.offline:
             local_path = get_local_path() / self.org / self.repo
-            output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
+            output = _run(["git", "-C", str(local_path), "show-ref", "--heads"]).split("\n")
         else:
-            cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+            cmd = ["git", "ls-remote", "--heads", f"https://github.com/{self.org}/{self.repo}"]
             try:
                 with _spawn(cmd, timeout=3) as child:
-                    output = child.read().strip().split("\r\n")
+                    if ON_WINDOWS:
+                        # Ignore first line
+                        child.read()
+
+                        output = [line for line in _escape_ansi(child.read()).split("\r\n") if line]
+                    else:
+                        output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
                 if "Username for" in child.buffer:
                     return []
@@ -652,40 +675,87 @@ class _StreamToLogger:
         pass
 
 
-@contextlib.contextmanager
-def _spawn(command, quiet=False, timeout=None):
-    # Spawn command
-    child = pexpect.spawn(
-        command,
-        encoding="utf-8",
-        env=dict(os.environ),
-        timeout=timeout)
+if ON_WINDOWS:
+    @contextlib.contextmanager
+    def _spawn(command, quiet=False, timeout=30, password=None):
+        # Spawn command
+        child = PtyProcess.spawn(
+            command,
+            env=dict(os.environ)
+        )
 
-    try:
-        if not quiet:
-            # Log command output to logger
-            child.logfile_read = _StreamToLogger(logger.debug)
-        yield child
-    except BaseException:
-        child.close()
-        raise
-    else:
-        if child.isalive():
-            try:
-                child.expect(pexpect.EOF, timeout=timeout)
-            except pexpect.TIMEOUT:
-                raise Error()
-        child.close(force=True)
-        if child.signalstatus is None and child.exitstatus != 0:
-            logger.debug("{} exited with {}".format(command, child.exitstatus))
-            raise Error()
+        try:
+            # Preemptively feed user's password
+            if child.isalive() and password is not None:
+                child.write(f"{password}\n")
+            yield child
+        except BaseException:
+            del child
+            raise
+        else:
+            # Wait for process to finish gracefully
+            start = time.time()
+
+            while child.isalive() and time.time() < start + timeout:
+                time.sleep(.1)
+
+            # Get the exitstatus and force quit
+            exitstatus = child.exitstatus
+            del child
+
+            # Log any failed commands
+            if exitstatus != 0:
+                logger.debug("{} exited with {}".format(command, exitstatus))
+
+else:
+    @contextlib.contextmanager
+    def _spawn(command, quiet=False, timeout=None, password=None):
+        args = command[1:]
+        command = command[0]
+
+        # Spawn command
+        child = pexpect.spawn(
+            command,
+            args=args,
+            encoding="utf-8",
+            env=dict(os.environ),
+            timeout=timeout)
+
+        try:
+            if not quiet:
+                # Log command output to logger
+                child.logfile_read = _StreamToLogger(logger.debug)
+            yield child
+        except BaseException:
+            child.close()
+            raise
+        else:
+            # Wait for process to finish gracefully
+            if child.isalive():
+                try:
+                    child.expect(pexpect.EOF, timeout=timeout)
+                except pexpect.TIMEOUT:
+                    raise Error()
+
+            # Get the exitstatus and force quit
+            child.close(force=True)
+            exitstatus = child.exitstatus
+
+            # Log any failed commands
+            if child.signalstatus is None and exitstatus != 0:
+                logger.debug("{} exited with {}".format(command, child.exitstatus))
 
 
-def _run(command, quiet=False, timeout=None):
+def _run(command, quiet=False, timeout=30, password=None):
     """Run a command, returns command output."""
     try:
-        with _spawn(command, quiet, timeout) as child:
-            command_output = child.read().strip().replace("\r\n", "\n")
+        with _spawn(command, quiet, timeout, password) as child:
+            if ON_WINDOWS:
+                child.read()
+            try:
+                command_output = _escape_ansi(child.read().replace("\r\n", "\n")).strip()
+            except EOFError:
+                command_output = ""
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
@@ -723,8 +793,9 @@ def _match_files(universe, pattern):
 
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
-    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, "/".join(Path(filepath).parts))
     r = requests.get(url)
+
     if not r.ok:
         if r.status_code == 404:
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
@@ -791,42 +862,60 @@ def _lfs_add(files, git):
                           "and then re-run!").format("\n".join(larges)))
 
         # Install git-lfs for this repo
-        _run(git("lfs install --local"))
+        _run(git("lfs", "install", "--local"))
 
         # For pre-push hook
-        _run(git("config credential.helper cache"))
+        _run(git("config", "credential.helper", "cache"))
 
         # Rm previously added file, have lfs track file, add file again
         for large in larges:
-            _run(git("rm --cached {large}", large=large))
-            _run(git("lfs track {large}", large=large))
-            _run(git("add {large}", large=large))
-        _run(git("add --force .gitattributes"))
+            _run(git("rm", "--cached", large))
+            _run(git("lfs", "track", large))
+            _run(git("add", large))
+        _run(git("add", "--force", ".gitattributes"))
 
 
 def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
-    # Require ssh-agent
-    child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
+    if ON_WINDOWS:
+        # Ensure 64-bit Windows can find 32-bit Python under windows
+        system32 = os.path.join(os.environ['SystemRoot'], 'SysNative' if platform.architecture()[0] == '32bit' else 'System32')
+        ssh_path = os.path.join(system32, 'OpenSSH\\ssh.exe')
+        pexpect_spawn = popen_spawn.PopenSpawn
+    else:
+        pexpect_spawn = pexpect.spawn
+        ssh_path = "ssh"
+
+    # -oBatchMode=yes prevents password prompt on OpenSSH
+    # https://serverfault.com/questions/61915/how-do-i-make-ssh-fail-rather-than-prompt-for-a-password-if-the-public-key-authe
+    child = pexpect_spawn("{} -oBatchMode=yes -p443 -T git@ssh.github.com".format(ssh_path), encoding="utf8")
+
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         i = child.expect(["Hi (.+)! You've successfully authenticated",
                           "Enter passphrase for key",
                           "Permission denied",
+                          "Host key verification failed",
                           "Are you sure you want to continue connecting"])
     except pexpect.TIMEOUT:
         return None
 
-
-    child.close()
+    if ON_WINDOWS:
+        child.kill(signal.SIGINT)
+    else:
+        child.close()
 
     if i == 0:
         username = child.match.groups()[0]
     else:
         return None
 
+    # if repo is unspecified, default to usernae
+    if repo is None:
+        repo = username
+
     return User(name=username,
-                repo=f"ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
+                repo=f"git+ssh://git@ssh.github.com:443/{org}/{repo}",
                 org=org)
 
 
@@ -835,25 +924,27 @@ def _authenticate_https(org, repo=None):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
     try:
-        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = Git().set(Git.cache)
+        git = Git()
 
         # Get credentials from cache if possible
-        with _spawn(git("credential fill"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline("")
-            i = child.expect(["Username for '.+'", "Password for '.+'",
-                              "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
-            if i == 2:
-                username, password = child.match.groups()
-            else:
-                username = password = None
-                child.close()
-                child.exitstatus = 0
+        if not ON_WINDOWS:
+            Git.cache = ["-c", "credential.helper=", "-c", f"credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"]
+            git = git.set(*Git.cache)
 
+            with _spawn(git("credential", "fill"), quiet=True) as child:
+                child.sendline("protocol=https")
+                child.sendline("host=github.com")
+                child.sendline("")
+                i = child.expect(["Username for '.+'", "Password for '.+'",
+                                  "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
+                if i == 2:
+                    usernme, password = child.match.groups()
+                else:
+                    username = password = None
+                    child.close()
+                    child.exitstatus = 0
 
-        if password is None:
+        if ON_WINDOWS or password is None:
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
 
@@ -876,17 +967,25 @@ def _authenticate_https(org, repo=None):
         # Especially if user logged in via email address
         username = res.json()["login"]
 
-        # Credentials are correct, best cache them
-        with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline(f"path={org}/{username}")
-            child.sendline(f"username={username}")
-            child.sendline(f"password={password}")
-            child.sendline("")
+        # If repo is unspecified, default to username
+        if repo is None:
+            repo = username
+
+        if not ON_WINDOWS:
+            # Credentials are correct, best cache them
+            with _spawn(git("-c", "credentialcache.ignoresighup=true", "credential", "approve"), quiet=True) as child:
+                child.sendline("protocol=https")
+                child.sendline("host=github.com")
+                child.sendline(f"path={org}/{username}")
+                child.sendline(f"username={username}")
+                child.sendline(f"password={password}")
+                child.sendline("")
+
+        global PASSWORD
+        PASSWORD = password
 
         yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
+                   repo=f"https://{username}@github.com/{org}/{repo}",
                    org=org)
     except BaseException:
         # Some error occured while this context manager is active, best forget credentials.
@@ -909,56 +1008,87 @@ def _prompt_username(prompt="Username: "):
 def _prompt_password(prompt="Password: "):
     """Prompt the user for password, printing asterisks for each character"""
     print(prompt, end="", flush=True)
-    password_bytes = []
-    password_string = ""
 
-    with _no_echo_stdin():
-        while True:
-            # Read one byte
-            ch = sys.stdin.buffer.read(1)[0]
-            # If user presses Enter or ctrl-d
-            if ch in (ord("\r"), ord("\n"), 4):
-                print("\r")
-                break
-            # Del
-            elif ch == 127:
-                if len(password_string) > 0:
-                    print("\b \b", end="", flush=True)
-                # Remove last char and its corresponding bytes
-                password_string = password_string[:-1]
-                password_bytes = list(password_string.encode("utf8"))
-            # Ctrl-c
-            elif ch == 3:
-                print("^C", end="", flush=True)
-                raise KeyboardInterrupt
+    # List of UTF-8 chars in the password
+    password = []
+    # buffer containing the bytes of the char currently being read
+    char_buffer = []
+
+    getch = _Getch()
+
+
+    # with _no_echo_stdin():
+    while True:
+        # Read one byte
+        ch = getch()
+
+        # If user presses Enter or ctrl-d
+        if ch in (ord("\r"), ord("\n"), 4):
+            print("\r")
+            break
+        # Del
+        elif ch == 127 or ch == 8:
+            if password:
+                print("\b \b", end="", flush=True)
+            # Remove last char and its corresponding bytes
+            password.pop()
+        # Ctrl-c
+        elif ch == 3:
+            print("^C", end="", flush=True)
+            raise KeyboardInterrupt
+        else:
+            char_buffer.append(ch)
+            # UTF-8 characters cannot be longer than 4 bytes
+            if len(char_buffer) > 4:
+                raise Error(_("Invalid UTF-8 character(s) in password"))
+
+            try:
+                char = bytes(char_buffer).decode("utf8")
+            except UnicodeDecodeError:
+                pass
             else:
-                password_bytes.append(ch)
+                password.append(char)
+                char_buffer.clear()
+                print("*", end="", flush=True)
 
-                # If byte added concludes a utf8 char, print *
-                try:
-                    password_string = bytes(password_bytes).decode("utf8")
-                except UnicodeDecodeError:
-                    pass
-                else:
-                    print("*", end="", flush=True)
 
-    if not password_string:
+    # If there are still bytes in the char buffer, it must be invalid UTF-8
+    if char_buffer:
+        raise Error(_("Invalid UTF-8 character(s) in password"))
+
+    if not password:
         print("Password cannot be empty, please try again.")
         return _prompt_password(prompt)
 
-    return password_string
+    return "".join(password)
 
 
-@contextlib.contextmanager
-def _no_echo_stdin():
-    """
-    On Unix only, have stdin not echo input.
-    https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
-    """
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-    try:
-        yield
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+class _Getch:
+    """Gets a single character from standard input.  Does not echo to the
+screen."""
+    def __init__(self):
+        self.impl = (_GetchWindows if ON_WINDOWS else _GetchUnix)()
+
+    def __call__(self):
+        return self.impl()
+
+
+class _GetchUnix:
+    def __call__(self):
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            return ord(sys.stdin.buffer.read(1))
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+class _GetchWindows:
+    def __call__(self):
+        return ord(msvcrt.getch())
+
+
+def _escape_ansi(line):
+    ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
+    return ansi_escape.sub('', line)
