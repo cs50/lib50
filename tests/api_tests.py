@@ -30,15 +30,15 @@ class TestGit(unittest.TestCase):
         lib50._api.logger.debug = self.old_debug
 
     def test_no_args(self):
-        self.assertEqual(lib50._api.Git()("foo"), "git foo")
+        self.assertEqual(lib50._api.Git()("foo"), ["git", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
 
     def test_arg(self):
-        self.assertEqual(lib50._api.Git().set("bar")("foo"), "git bar foo")
+        self.assertEqual(lib50._api.Git().set("bar")("foo"), ["git", "bar", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git bar foo", attrs=["bold"])])
 
     def test_args(self):
-        self.assertEqual(lib50._api.Git().set("baz")("foo"), "git baz foo")
+        self.assertEqual(lib50._api.Git().set("baz")("foo"), ["git", "baz", "foo"])
         self.assertEqual(self.info_output, [termcolor.colored("git baz foo", attrs=["bold"])])
 
     def test_special_args_not_set(self):
@@ -47,7 +47,7 @@ class TestGit(unittest.TestCase):
             lib50._api.Git.git_dir = "baz"
             lib50._api.Git.cache = "qux"
 
-            self.assertEqual(lib50._api.Git()("foo"), "git foo")
+            self.assertEqual(lib50._api.Git()("foo"), ["git", "foo"])
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
         finally:
             lib50._api.Git.work_tree = ""
@@ -56,11 +56,11 @@ class TestGit(unittest.TestCase):
 
     def test_special_args(self):
         try:
-            lib50._api.Git.working_area = "bar"
-            lib50._api.Git.cache = "baz"
+            lib50._api.Git.working_area = ["bar"]
+            lib50._api.Git.cache = ["baz"]
 
-            git = lib50._api.Git().set(lib50._api.Git.working_area).set(lib50._api.Git.cache)
-            self.assertEqual(git("foo"), "git bar baz foo")
+            git = lib50._api.Git().set(*lib50._api.Git.working_area).set(*lib50._api.Git.cache)
+            self.assertEqual(git("foo"), ["git", "bar", "baz", "foo"])
             self.assertEqual(self.info_output, [termcolor.colored("git foo", attrs=["bold"])])
         finally:
             lib50._api.Git.working_area = ""
@@ -83,7 +83,7 @@ class TestSlug(unittest.TestCase):
     def test_case(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
             lib50._api.Slug("cs50/lib50/TESTS/bar")
-        self.assertEquals(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
+        self.assertEqual(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
 
     def test_online(self):
         if os.environ.get("TRAVIS") == "true":
