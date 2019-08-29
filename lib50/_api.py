@@ -105,7 +105,7 @@ def local(slug, offline=False):
 
     if not offline:
         # Get latest version of checks
-        _run(git("fetch", "origin", slug.branch))
+        _run(git("fetch", "origin", slug.branch, "--depth", "1"))
 
     # Ensure that local copy of the repo is identical to remote copy
     _run(git("checkout", "-f", "-B", slug.branch, f"origin/{slug.branch}"))
