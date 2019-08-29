@@ -143,7 +143,6 @@ def working_area(files, name=""):
                     full_path = os.path.join(root, fname)
                     os.chmod(full_path, stat.S_IWRITE)
 
-
 @contextlib.contextmanager
 def cd(dest):
     """ Temporarily cd into a directory"""
@@ -595,8 +594,9 @@ class Slug:
                 with _spawn(cmd, timeout=3) as child:
                     if ON_WINDOWS:
                         # Ignore first line
-                        child.readline()
-                        output = _escape_ansi(child.read()).split("\r\n")
+                        child.read()
+
+                        output = [line for line in _escape_ansi(child.read()).split("\r\n") if line]
                     else:
                         output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
@@ -745,7 +745,7 @@ else:
                 logger.debug("{} exited with {}".format(command, child.exitstatus))
 
 
-def _run(command, quiet=False, timeout=None, password=None):
+def _run(command, quiet=False, timeout=30, password=None):
     """Run a command, returns command output."""
     try:
         with _spawn(command, quiet, timeout, password) as child:
