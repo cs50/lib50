@@ -323,7 +323,9 @@ def prepare(tool, branch, user, included):
         _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
         # Git add all included files
-        _run(git(f"add -f {' '.join(quote(f) for f in included)}"))
+        # ON_WINDOWS this cmd needs to be a list, as deep down subprocess.list2cmdline
+        #   is called and this handles the quoting
+        _run(git(f"add -f").split(" ") + [quote(f) for f in included])
 
         # Remove gitattributes from included
         if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -699,6 +701,7 @@ if ON_WINDOWS:
         else:
             # Wait for process to finish gracefully
             start = time.time()
+
             while child.isalive() and time.time() < start + timeout:
                 time.sleep(.1)
 
@@ -713,9 +716,16 @@ if ON_WINDOWS:
 else:
     @contextlib.contextmanager
     def _spawn(command, quiet=False, timeout=None, password=None):
+        if isinstance(command, list) and len(command):
+            args = command[1:]
+            command = command[0]
+        else:
+            args = []
+
         # Spawn command
         child = pexpect.spawn(
             command,
+            args=args,
             encoding="utf-8",
             env=dict(os.environ),
             timeout=timeout)
