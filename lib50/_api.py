@@ -10,11 +10,12 @@ import itertools
 import logging
 import os
 import platform
-import signal
 from pathlib import Path
 import pkg_resources
 import re
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import stat
@@ -96,7 +97,8 @@ def local(slug, offline=False):
 
     local_path = get_local_path() / slug.org / slug.repo
 
-    git = Git().set("-C", str(local_path))
+    Git.working_area = ["-C", str(local_path)]
+    git = Git().set(*Git.working_area)
     if not local_path.exists():
         _run(Git()("init",  str(local_path)))
         _run(git("remote", "add", "origin", f"https://github.com/{slug.org}/{slug.repo}"))
@@ -106,8 +108,8 @@ def local(slug, offline=False):
         _run(git("fetch", "origin", slug.branch))
 
     # Ensure that local copy of the repo is identical to remote copy
-    _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
-    _run(git("reset --hard HEAD"))
+    _run(git("checkout", "-f", "-B", slug.branch, f"origin/{slug.branch}"))
+    _run(git("reset", "--hard", "HEAD"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -315,10 +317,10 @@ def prepare(tool, branch, user, included):
 
         # Set user name/email in repo config
         _run(git("config", "user.email", user.email))
-        _run(git("config" "user.name", user.name))
+        _run(git("config", "user.name", user.name))
 
         # Switch to branch without checkout
-        _run(git("symbolic-ref", "HEAD" f"refs/heads/{branch}"))
+        _run(git("symbolic-ref", "HEAD", f"refs/heads/{branch}"))
 
         _run(git("add", "-f", *included))
 
@@ -517,7 +519,7 @@ class Git:
         git_command = ["git"] + git._args
 
         # Format to show in git info
-        logged_command = " ".join(git_command)
+        logged_command = " ".join(shlex.quote(arg) for arg in git_command)
         for opt in [Git.cache, Git.working_area]:
             logged_command = logged_command.replace(" ".join(opt), "")
         logged_command = re.sub(' +', ' ', logged_command)
