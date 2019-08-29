@@ -904,6 +904,7 @@ def _authenticate_ssh(org, repo=None):
         i = child.expect(["Hi (.+)! You've successfully authenticated",
                           "Enter passphrase for key",
                           "Permission denied",
+                          "Host key verification failed",
                           "Are you sure you want to continue connecting"])
     except pexpect.TIMEOUT:
         return None
