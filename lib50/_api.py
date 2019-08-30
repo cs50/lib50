@@ -938,7 +938,7 @@ def _authenticate_https(org, repo=None):
                 i = child.expect(["Username for '.+'", "Password for '.+'",
                                   "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
                 if i == 2:
-                    usernme, password = child.match.groups()
+                    username, password = child.match.groups()
                 else:
                     username = password = None
                     child.close()
