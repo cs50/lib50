@@ -928,7 +928,7 @@ def _authenticate_https(org, repo=None):
 
         # Get credentials from cache if possible
         if not ON_WINDOWS:
-            Git.cache = ["-c", "credential.helper=", "-c", f"credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"]
+            Git.cache = ["-c", "credential.helper=", "-c", f"credential.helper=cache --socket {_CREDENTIAL_SOCKET}"]
             git = git.set(*Git.cache)
 
             with _spawn(git("credential", "fill"), quiet=True) as child:
