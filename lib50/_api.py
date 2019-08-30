@@ -486,7 +486,7 @@ def check_dependencies():
 
 
 def logout():
-    _run("git", "credential-cache", "--socket", _CREDENTIAL_SOCKET, "exit")
+    _run(["git", "credential-cache", "--socket", _CREDENTIAL_SOCKET, "exit"])
 
 
 @attr.s(slots=True)
