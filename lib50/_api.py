@@ -82,7 +82,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
             format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
-            return username, commit_hash, remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
+            message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
+            return username, commit_hash, message
         else:
             raise Error(_("No files were submitted."))
 
