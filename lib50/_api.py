@@ -73,7 +73,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    org, (included, excluded), message = connect(slug, config_loader)
+    org, (included, excluded), message, results = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(org, repo=repo) as user, prepare(tool, slug, user, included):
@@ -81,7 +81,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
         # Show any prompt if specified
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
-            return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
+            format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
+            return username, commit_hash, message.format(results=results.format(**format_dict), **format_dict)
         else:
             raise Error(_("No files were submitted."))
 
@@ -248,8 +249,9 @@ def connect(slug, config_loader):
         # By default send check50/style50 results back to submit.cs50.io
         remote = {
             "org": DEFAULT_PUSH_ORG,
-            "message": "Go to https://submit.cs50.io/users/{username}/{slug} to see your results.",
-            "callback": "https://submit.cs50.io/hooks/results"
+            "message": "Go to {results} to see your results.",
+            "callback": "https://submit.cs50.io/hooks/results",
+            "results": "https://submit.cs50.io/{username}/{slug}"
         }
 
         remote.update(config.get("remote", {}))
@@ -261,7 +263,7 @@ def connect(slug, config_loader):
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return remote["org"], (included, excluded), remote["message"]
+        return remote["org"], (included, excluded), remote["message"], remote["results"]
 
 
 @contextlib.contextmanager
