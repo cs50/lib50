@@ -30,16 +30,16 @@ class TestConnect(unittest.TestCase):
         f = io.StringIO()
         open("hello.py", "w").close()
         with contextlib.redirect_stdout(f):
-            org, (included, excluded), message = lib50.connect("cs50/lib50/tests/bar", self.loader)
+            remote, (included, excluded) = lib50.connect("cs50/lib50/tests/bar", self.loader)
             self.assertEqual(excluded, set())
 
-            self.assertEqual(org, lib50._api.DEFAULT_PUSH_ORG)
+            self.assertEqual(remote["org"], lib50._api.DEFAULT_PUSH_ORG)
 
         f = io.StringIO()
         loader = lib50.config.Loader("submit50")
         loader.scope("files", "exclude", "include", "require")
         with contextlib.redirect_stdout(f):
-            include, excluded, message = lib50.connect("cs50/lib50/tests/bar", loader)
+            remote, (included, excluded) = lib50.connect("cs50/lib50/tests/bar", loader)
             self.assertEqual(included, {"hello.py"})
 
     def test_missing_problem(self):
