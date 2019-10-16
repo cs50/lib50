@@ -250,7 +250,7 @@ def connect(slug, config_loader):
         # By default send check50/style50 results back to submit.cs50.io
         remote = {
             "org": DEFAULT_PUSH_ORG,
-            "message": _("Go to {} to see your results.".format(results)),
+            "message": _("Go to {results} to see your results."),
             "callback": "https://submit.cs50.io/hooks/results",
             "results": "https://submit.cs50.io/{username}/{slug}"
         }
