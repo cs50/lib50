@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: lib50 2.1.0\n"
 "Report-Msgid-Bugs-To: informatika@sman1batujajar.sch.id\n"
 "POT-Creation-Date: 2019-10-16 12:33+0000\n"
-"PO-Revision-Date: 2019-10-16 20:53+0700\n"
+"PO-Revision-Date: 2019-10-16 22:57+0700\n"
 "Last-Translator: Dimas Ahmad Eka Putra <dimas@sman1batujajar.sch.id>\n"
 "Language: id\n"
 "Language-Team: id <informatika@sman1batujajar.sch.id>\n"
@@ -111,10 +111,6 @@ msgstr "Slug tidak valid. Apakah maksud Anda {}, tanpa garis miring awal?"
 msgid "Invalid slug. Did you mean {}, without the trailing slash?"
 msgstr "Slug tidak valid. Apakah maksud Anda {}, tanpa garis miring akhir?"
 
-#: lib50/_api.py:711 lib50/_api.py:749
-msgid "{} exited with {}"
-msgstr "{} keluar dengan {}"
-
 #: lib50/_api.py:804
 msgid "Invalid slug. Did you mean to submit something else?"
 msgstr "Slug tidak valid. Apakah Anda bermaksud mengirimkan sesuatu yang lain?"
@@ -124,8 +120,8 @@ msgid "Could not connect to GitHub. Do make sure you are connected to the intern
 msgstr "Tidak dapat terhubung ke GitHub. Pastikan Anda terhubung ke internet."
 
 #: lib50/_api.py:834
-msgid "Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."
-msgstr "Tidak dapat terhubung ke GitHub. Sepertinya GitHub mengalami beberapa masalah dengan {component['name']}. Periksa https://www.githubstatus.com dan coba lagi nanti."
+msgid "Could not connect to GitHub. It looks like GitHub is having some issues with {}. Do check on https://www.githubstatus.com and try again later."
+msgstr "Tidak dapat terhubung ke GitHub. Sepertinya GitHub mengalami beberapa masalah dengan {}. Periksa https://www.githubstatus.com dan coba lagi nanti."
 
 #: lib50/_api.py:855
 msgid ""
