@@ -1,0 +1,208 @@
+# Indonesian translations for lib50.
+# Copyright (C) 2019 Dimas Ahmad Eka Putra
+# This file is distributed under the same license as the lib50 project.
+# Dimas Ahmad Eka Putra <dimas@sman1batujajar.sch.id>, 2019.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: lib50 2.1.0\n"
+"Report-Msgid-Bugs-To: informatika@sman1batujajar.sch.id\n"
+"POT-Creation-Date: 2019-10-16 12:33+0000\n"
+"PO-Revision-Date: 2019-10-16 20:53+0700\n"
+"Last-Translator: Dimas Ahmad Eka Putra <dimas@sman1batujajar.sch.id>\n"
+"Language: id\n"
+"Language-Team: id <informatika@sman1batujajar.sch.id>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.7.0\n"
+"X-Generator: Poedit 2.2.4\n"
+
+#: lib50/_api.py:88
+msgid "No files were submitted."
+msgstr "Tidak ada file yang dikirimkan."
+
+#: lib50/_api.py:119
+msgid "{} does not exist at {}/{}"
+msgstr "{} tidak ada di {}/{}"
+
+#: lib50/_api.py:236
+msgid "Connecting"
+msgstr "Menghubungkan"
+
+#: lib50/_api.py:244
+msgid "Invalid slug for {}. Did you mean something else?"
+msgstr "Slug tidak valid untuk {}. Apakah maksud Anda sesuatu yang lain?"
+
+#: lib50/_api.py:253
+msgid "Go to {results} to see your results."
+msgstr "Buka {results} untuk melihat hasil Anda."
+
+#: lib50/_api.py:265
+msgid "No files in this directory are expected for submission."
+msgstr "Tidak ada file dalam direktori ini yang diharapkan untuk diserahkan."
+
+#: lib50/_api.py:277
+msgid "Authenticating"
+msgstr "Mengautentikasi"
+
+#: lib50/_api.py:298
+msgid "Preparing"
+msgstr "Mempersiapkan"
+
+#: lib50/_api.py:305
+msgid "Looks like {} isn't enabled for your account yet. "
+msgstr "Sepertinya {} belum diaktifkan untuk akun Anda. "
+
+#: lib50/_api.py:307
+msgid "Please contact your instructor about this issue."
+msgstr "Silakan hubungi instruktur Anda tentang masalah ini."
+
+#: lib50/_api.py:309
+msgid "Please go to https://submit.cs50.io in your web browser and try again."
+msgstr "Silakan buka https://submit.cs50.io di browser web Anda dan coba lagi."
+
+#: lib50/_api.py:347
+msgid "Uploading"
+msgstr "Mengunggah"
+
+#: lib50/_api.py:348
+msgid "automated commit by {}"
+msgstr "commit otomatis oleh {}"
+
+#: lib50/_api.py:393
+msgid "Invalid slug: {}. Did you mean something else?"
+msgstr "Slug tidak valid: {}. Apakah maksud Anda sesuatu yang lain?"
+
+#: lib50/_api.py:397
+msgid "Invalid slug: {}. Multiple configurations (both .yaml and .yml) found."
+msgstr "Slug tidak valid: {}. Beberapa konfigurasi (.yaml dan .yml) ditemukan."
+
+#: lib50/_api.py:482
+msgid "You don't have git. Install git, then re-run!"
+msgstr "Anda tidak memiliki git. Pasang git, lalu jalankan kembali!"
+
+#: lib50/_api.py:488
+msgid "You have an old version of git. Install version 2.7 or later, then re-run!"
+msgstr "Anda memiliki versi lama git. Pasang versi 2.7 atau yang lebih baru, kemudian jalankan kembali!"
+
+#: lib50/_api.py:548 lib50/_api.py:614
+msgid "Invalid slug"
+msgstr "Slug tidak valid"
+
+#: lib50/_api.py:559
+msgid "Could not connect to GitHub, it seems you are offline."
+msgstr "Tidak dapat terhubung ke GitHub, sepertinya Anda sedang offline."
+
+#: lib50/_api.py:571
+msgid "Invalid slug: {}"
+msgstr "Slug tidak valid: {}"
+
+#: lib50/_api.py:577
+msgid "Invalid slug. Did you mean {}, without the leading and trailing slashes?"
+msgstr "Slug tidak valid. Apakah maksud Anda {}, tanpa garis miring awal dan akhir?"
+
+#: lib50/_api.py:580
+msgid "Invalid slug. Did you mean {}, without the leading slash?"
+msgstr "Slug tidak valid. Apakah maksud Anda {}, tanpa garis miring awal?"
+
+#: lib50/_api.py:583
+msgid "Invalid slug. Did you mean {}, without the trailing slash?"
+msgstr "Slug tidak valid. Apakah maksud Anda {}, tanpa garis miring akhir?"
+
+#: lib50/_api.py:711 lib50/_api.py:749
+msgid "{} exited with {}"
+msgstr "{} keluar dengan {}"
+
+#: lib50/_api.py:804
+msgid "Invalid slug. Did you mean to submit something else?"
+msgstr "Slug tidak valid. Apakah Anda bermaksud mengirimkan sesuatu yang lain?"
+
+#: lib50/_api.py:810 lib50/_api.py:825
+msgid "Could not connect to GitHub. Do make sure you are connected to the internet."
+msgstr "Tidak dapat terhubung ke GitHub. Pastikan Anda terhubung ke internet."
+
+#: lib50/_api.py:834
+msgid "Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."
+msgstr "Tidak dapat terhubung ke GitHub. Sepertinya GitHub mengalami beberapa masalah dengan {component['name']}. Periksa https://www.githubstatus.com dan coba lagi nanti."
+
+#: lib50/_api.py:855
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Remove these files from your directory and then re-run!"
+msgstr ""
+"File-file ini terlalu besar untuk dikirim:\n"
+"{}\n"
+"Hapus file-file ini dari direktori Anda dan kemudian jalankan kembali!"
+
+#: lib50/_api.py:863
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Install git-lfs (or remove these files from your directory) and then re-run!"
+msgstr ""
+"File-file ini terlalu besar untuk dikirim:\n"
+"{}\n"
+"Pasang git-lfs (atau hapus file-file ini dari direktori Anda) dan kemudian jalankan kembali!"
+
+#: lib50/_api.py:951
+msgid "GitHub username: "
+msgstr "Nama pengguna GitHub: "
+
+#: lib50/_api.py:952
+msgid "GitHub password: "
+msgstr "Kata sandi GitHub: "
+
+#: lib50/_api.py:959
+msgid "Looks like you have two-factor authentication enabled! Please generate a personal access token (with GitHub's `repo` scope) and use it as your password. See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info."
+msgstr "Sepertinya Anda mengaktifkan otentikasi dua faktor! Silakan buat token akses pribadi dan menggunakannya sebagai password Anda. Lihat https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line untuk info lebih lanjut."
+
+#: lib50/_api.py:966
+msgid "Invalid username and/or password."
+msgstr "Nama pengguna dan/atau kata sandi tidak valid."
+
+#: lib50/_api.py:967
+msgid "Could not authenticate user."
+msgstr "Tidak dapat mengautentikasi pengguna."
+
+#: lib50/_api.py:1004
+msgid "Username cannot be empty, please try again."
+msgstr "Nama pengguna tidak boleh kosong, silakan coba lagi."
+
+#: lib50/_api.py:1046 lib50/_api.py:1060
+msgid "Invalid UTF-8 character(s) in password"
+msgstr "Karakter UTF-8 invalid dalam kata sandi"
+
+#: lib50/_api.py:1063
+msgid "Password cannot be empty, please try again."
+msgstr "Kata sandi tidak boleh kosong, silakan coba lagi."
+
+#: lib50/_errors.py:18
+msgid "You seem to be missing these required files:"
+msgstr "Tampaknya Anda kehilangan file-file ini:"
+
+#: lib50/_errors.py:20
+msgid "You are currently in: {}, did you perhaps intend another directory?"
+msgstr "Anda sedang dalam: {}, apakah mungkin maksud Anda direktori lain?"
+
+#: lib50/config.py:31
+msgid "Two config files (.cs50.yaml and .cs50.yml) found at {}"
+msgstr "Dua file konfigurasi (.cs50.yaml dan .cs50.yml) ditemukan di {}"
+
+#: lib50/config.py:34
+msgid "No config file (.cs50.yaml or .cs50.yml) found at {}"
+msgstr "Tidak ada file konfigurasi (.cs50.yaml atau .cs50.yml) ditemukan di {}"
+
+#: lib50/config.py:100
+msgid "Config is not valid yaml."
+msgstr "Konfigurasi bukan yaml yang valid."
+
+#: lib50/config.py:107
+msgid "{} is not enabled by this config file."
+msgstr "{} tidak diaktifkan oleh file konfigurasi ini."
+
+#: lib50/config.py:182
+msgid "{} is not a valid tag for {}"
+msgstr "{} bukan tag yang valid untuk {}"
