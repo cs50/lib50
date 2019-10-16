@@ -554,19 +554,19 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlugError(_("Invalid slug: {}".format(self.slug)))
+            raise InvalidSlugError(_("Invalid slug: {}").format(self.slug))
 
     def _check_endings(self):
         """Check begin/end of slug, raises Error if malformed."""
         if self.slug.startswith("/") and self.slug.endswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the leading and trailing slashes?").format(self.slug.strip("/")))
         elif self.slug.startswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the leading slash?").format(self.slug.strip("/")))
         elif self.slug.endswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the trailing slash?").format(self.slug.strip("/")))
 
     def _get_branches(self):
         """Get branches from org/repo."""
@@ -763,7 +763,10 @@ def check_github_status():
     # If there is an indication of errors on GitHub's side
     for component in components:
         if component["status"] != "operational":
-            raise ConnectionError(_(f"Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."))
+            raise ConnectionError(
+                _("Could not connect to GitHub. "
+                  "It looks like GitHub is having some issues with {}. "
+                  "Do check on https://www.githubstatus.com and try again later.").format(component['name']))
 
 
 def _lfs_add(files, git):
