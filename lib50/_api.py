@@ -348,7 +348,7 @@ def upload(branch, user, tool, data):
     with ProgressBar(_("Uploading")):
         commit_message = _("automated commit by {}").format(tool)
 
-        data_str = " ".join(itertools.chain([""], (f"[{key}={val}]" for key, val in data.items())))
+        data_str = f" {' '.join((f'[{key}={val}]' for key, val in data.items()))}"
 
         commit_message = f"{commit_message}{data_str}"
 
