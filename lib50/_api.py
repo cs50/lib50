@@ -22,6 +22,7 @@ import stat
 import tempfile
 import threading
 import time
+import unicodedata
 
 import attr
 import jellyfish
@@ -1025,34 +1026,34 @@ def _prompt_password(prompt="Password: "):
         # Read one byte
         ch = getch()
 
+        char_buffer.append(ch)
+        # UTF-8 characters cannot be longer than 4 bytes
+        if len(char_buffer) > 4:
+            raise Error(_("Invalid UTF-8 character(s) in password"))
+
+        try:
+            char = bytes(char_buffer).decode("utf8")
+        except UnicodeDecodeError:
+            continue
+
+        char_buffer.clear()
+
         # If user presses Enter or ctrl-d
-        if ch in (ord("\r"), ord("\n"), 4):
+        if char in ("\r", "\n", "\x04"):
             print("\r")
             break
         # Del
-        elif ch == 127 or ch == 8:
+        elif char in ("\x7f", "\x08"):
             if password:
                 print("\b \b", end="", flush=True)
-            # Remove last char and its corresponding bytes
-            password.pop()
-        # Ctrl-c
-        elif ch == 3:
+                # Remove last char and its corresponding bytes
+                password.pop()
+        elif char == "\x03":
             print("^C", end="", flush=True)
             raise KeyboardInterrupt
-        else:
-            char_buffer.append(ch)
-            # UTF-8 characters cannot be longer than 4 bytes
-            if len(char_buffer) > 4:
-                raise Error(_("Invalid UTF-8 character(s) in password"))
-
-            try:
-                char = bytes(char_buffer).decode("utf8")
-            except UnicodeDecodeError:
-                pass
-            else:
-                password.append(char)
-                char_buffer.clear()
-                print("*", end="", flush=True)
+        elif unicodedata.category(char) != "Cc":
+            password.append(char)
+            print("*", end="", flush=True)
 
 
     # If there are still bytes in the char buffer, it must be invalid UTF-8
