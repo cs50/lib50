@@ -1051,6 +1051,7 @@ def _prompt_password(prompt="Password: "):
         elif char == "\x03":
             print("^C", end="", flush=True)
             raise KeyboardInterrupt
+        # Ignore any other control characters
         elif unicodedata.category(char) != "Cc":
             password.append(char)
             print("*", end="", flush=True)
