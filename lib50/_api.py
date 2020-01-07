@@ -283,11 +283,11 @@ def prepare(tool, branch, user, included):
             try:
                 _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
             except Error:
-                msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
+                msg = _("Make sure your username and/or password are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
                 if user.org != DEFAULT_PUSH_ORG:
-                    msg += _("Please contact your instructor about this issue.")
+                    msg += _("please contact your instructor.")
                 else:
-                    msg += _("Please go to {} in your web browser and try again.").format(AUTH_URL)
+                    msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
                 raise Error(msg)
 
