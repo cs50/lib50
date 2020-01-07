@@ -276,7 +276,7 @@ def prepare(tool, branch, user, included):
     Check that atleast one file is staged
     """
     with working_area(included) as area:
-        with ProgressBar("Verifying"):
+        with ProgressBar(_("Verifying")):
             Git.working_area = f"-C {shlex.quote(str(area))}"
             git = Git().set(Git.working_area)
             # Clone just .git folder
