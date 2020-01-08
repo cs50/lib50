@@ -289,6 +289,9 @@ def prepare(tool, branch, user, included):
                 else:
                     msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
+                msg += _((" If you're using GitHub two-factor authentication, you'll need to create and use a personal access token "
+                    "with the \"repo\" scope instead of your password. See https://cs50.ly/github-2fa for more information!"))
+
                 raise Error(msg)
 
         with ProgressBar(_("Preparing")) as progress_bar:
