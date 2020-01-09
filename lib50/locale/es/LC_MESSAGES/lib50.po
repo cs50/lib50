@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-06-14 12:49-0400\n"
+"POT-Creation-Date: 2020-01-09 16:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -12,97 +12,124 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.6.0\n"
+"Generated-By: Babel 2.8.0\n"
 
-#: lib50/_api.py:60
+#: lib50/_api.py:76
 msgid "No files were submitted."
 msgstr "No se ha entregado ningún archivo."
 
-#: lib50/_api.py:89
+#: lib50/_api.py:106
 msgid "{} does not exist at {}/{}"
 msgstr "{} no existe en {}/{}"
 
-#: lib50/_api.py:205
+#: lib50/_api.py:217
 msgid "Connecting"
 msgstr "Conectando"
 
-#: lib50/_api.py:214
+#: lib50/_api.py:225
 msgid "Invalid slug for {}. Did you mean something else?"
 msgstr "El slug no es válido para {}. ¿Quisiste entregar algo más?"
 
-#: lib50/_api.py:225
+#: lib50/_api.py:234
+msgid "Go to {results} to see your results."
+msgstr ""
+
+#: lib50/_api.py:246
 msgid "No files in this directory are expected for submission."
 msgstr "Ningún archivo en este directorio se espera para la entrega."
 
-#: lib50/_api.py:237
+#: lib50/_api.py:258
 msgid "Authenticating"
 msgstr "Autenticando"
 
-#: lib50/_api.py:258
+#: lib50/_api.py:280
+msgid "Verifying"
+msgstr ""
+
+#: lib50/_api.py:287
+msgid ""
+"Make sure your username and/or password are valid and {} is enabled for "
+"your account. To enable {}, "
+msgstr ""
+
+#: lib50/_api.py:289
+msgid "please contact your instructor."
+msgstr ""
+
+#: lib50/_api.py:291
+msgid "please go to {} in your web browser and try again."
+msgstr ""
+
+#: lib50/_api.py:298
 msgid "Preparing"
 msgstr "Preparando"
 
-#: lib50/_api.py:266
-msgid ""
-"Looks like {} isn't enabled for your account yet. Go to {} and make sure "
-"you accept any pending invitations!"
-msgstr ""
-"Parece que {} todavia no esta habilitado en tu cuenta. Visita {} y "
-"asegúrate de aceptar las invitaciones pendientes!"
-
-#: lib50/_api.py:303
+#: lib50/_api.py:334
 msgid "Uploading"
 msgstr "Subiendo"
 
-#: lib50/_api.py:305
+#: lib50/_api.py:335
 msgid "automated commit by {}"
 msgstr "confirmación automatizada por {}"
 
-#: lib50/_api.py:341
-msgid "Invalid slug. Did you mean something else?"
+#: lib50/_api.py:376
+#, fuzzy
+msgid "Invalid slug: {}. Did you mean something else?"
 msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
 
-#: lib50/_api.py:424
+#: lib50/_api.py:380
+msgid "Invalid slug: {}. Multiple configurations (both .yaml and .yml) found."
+msgstr ""
+
+#: lib50/_api.py:465
 msgid "You don't have git. Install git, then re-run!"
 msgstr "No tienes git. ¡Instala git, y luego vuelve a ejecutar!"
 
-#: lib50/_api.py:430
+#: lib50/_api.py:471
 msgid "You have an old version of git. Install version 2.7 or later, then re-run!"
 msgstr ""
 "Tienes una versión antigua de git. ¡Instala la versión 2.7 o superior, y "
 "vuelve a ejecutar!"
 
-#: lib50/_api.py:487
+#: lib50/_api.py:534 lib50/_api.py:594
 msgid "Invalid slug"
 msgstr "El slug no es válido"
 
-#: lib50/_api.py:510
+#: lib50/_api.py:557
 msgid "Invalid slug: {}"
 msgstr "El slug no es válido: {}"
 
-#: lib50/_api.py:516
+#: lib50/_api.py:563
 msgid "Invalid slug. Did you mean {}, without the leading and trailing slashes?"
 msgstr ""
 "El slug no es válido. ¿Querías decir {}, sin las barras la barra diagonal"
 " principal y la barra diagonal final?"
 
-#: lib50/_api.py:519
+#: lib50/_api.py:566
 msgid "Invalid slug. Did you mean {}, without the leading slash?"
 msgstr "El slug no es válido. ¿Querías decir {}, sin la barra diagonal principal?"
 
-#: lib50/_api.py:522
+#: lib50/_api.py:569
 msgid "Invalid slug. Did you mean {}, without the trailing slash?"
 msgstr "El slug no es válido. ¿Querías decir {}, sin la barra diagonal al final?"
 
-#: lib50/_api.py:663
+#: lib50/_api.py:736
 msgid "Invalid slug. Did you mean to submit something else?"
 msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
 
-#: lib50/_api.py:665
-msgid "Could not connect to GitHub."
-msgstr "No se pudo conectar a GitHub."
+#: lib50/_api.py:742 lib50/_api.py:757
+msgid ""
+"Could not connect to GitHub. Do make sure you are connected to the "
+"internet."
+msgstr ""
 
-#: lib50/_api.py:687
+#: lib50/_api.py:767
+msgid ""
+"Could not connect to GitHub. It looks like GitHub is having some issues "
+"with {}. Do check on https://www.githubstatus.com and try again later."
+msgstr ""
+
+#: lib50/_api.py:790
 msgid ""
 "These files are too large to be submitted:\n"
 "{}\n"
@@ -112,7 +139,7 @@ msgstr ""
 "{}\n"
 "¡Quita estos archivos de tu directorio y luego vuelve a ejecutar!"
 
-#: lib50/_api.py:695
+#: lib50/_api.py:798
 msgid ""
 "These files are too large to be submitted:\n"
 "{}\n"
@@ -124,33 +151,14 @@ msgstr ""
 "Instala git-lfs (o quita estos archivos de tu directorio) y luego vuelve "
 "a ejecutar!"
 
-#: lib50/_api.py:729
+#: lib50/_api.py:866
 msgid "GitHub username: "
 msgstr "Nombre de usuario de GitHub: "
 
-#: lib50/_api.py:732
-msgid "GitHub password for {}: "
+#: lib50/_api.py:867
+#, fuzzy
+msgid "GitHub password: "
 msgstr "Contraseña de GitHub for {}: "
-
-#: lib50/_api.py:737
-msgid "Failed to connect to GitHub"
-msgstr "No se pudo conectar a GitHub"
-
-#: lib50/_api.py:741
-msgid ""
-"Looks like you have two-factor authentication enabled! Please generate a "
-"personal access token and use it as your password. See "
-"https://help.github.com/articles/creating-a-personal-access-token-for-"
-"the-command-line for more info."
-msgstr ""
-
-#: lib50/_api.py:748
-msgid "Invalid username and/or password."
-msgstr "Nombre de usuario y/o contraseña es inválido."
-
-#: lib50/_api.py:749
-msgid "Could not authenticate user."
-msgstr "No se pudo autenticar usuario."
 
 #: lib50/_errors.py:18
 msgid "You seem to be missing these required files:"
@@ -160,15 +168,53 @@ msgstr "Parece que faltan estos archivos:"
 msgid "You are currently in: {}, did you perhaps intend another directory?"
 msgstr "Estás actualmente en: {}. ¿Tal vez quisiste otro directorio?"
 
-#: lib50/config.py:33
+#: lib50/config.py:31
+#, fuzzy
+msgid "Two config files (.cs50.yaml and .cs50.yml) found at {}"
+msgstr "No se encontró un archivo de configuración (.cs50.yaml o .cs50.yml) en {}"
+
+#: lib50/config.py:34
 msgid "No config file (.cs50.yaml or .cs50.yml) found at {}"
 msgstr "No se encontró un archivo de configuración (.cs50.yaml o .cs50.yml) en {}"
 
-#: lib50/config.py:96
+#: lib50/config.py:100
 msgid "Config is not valid yaml."
 msgstr "El archivo de configuración no es yaml válido."
 
-#: lib50/config.py:177
+#: lib50/config.py:182
 msgid "{} is not a valid tag for {}"
 msgstr "{} no es una etiqueta válida para {}"
+
+#~ msgid ""
+#~ "Looks like {} isn't enabled for "
+#~ "your account yet. Go to {} and "
+#~ "make sure you accept any pending "
+#~ "invitations!"
+#~ msgstr ""
+#~ "Parece que {} todavia no esta "
+#~ "habilitado en tu cuenta. Visita {} "
+#~ "y asegúrate de aceptar las invitaciones"
+#~ " pendientes!"
+
+#~ msgid "Could not connect to GitHub."
+#~ msgstr "No se pudo conectar a GitHub."
+
+#~ msgid "Failed to connect to GitHub"
+#~ msgstr "No se pudo conectar a GitHub"
+
+#~ msgid ""
+#~ "Looks like you have two-factor "
+#~ "authentication enabled! Please generate a "
+#~ "personal access token and use it "
+#~ "as your password. See "
+#~ "https://help.github.com/articles/creating-a-personal-access-"
+#~ "token-for-the-command-line for "
+#~ "more info."
+#~ msgstr ""
+
+#~ msgid "Invalid username and/or password."
+#~ msgstr "Nombre de usuario y/o contraseña es inválido."
+
+#~ msgid "Could not authenticate user."
+#~ msgstr "No se pudo autenticar usuario."
 
