@@ -231,8 +231,9 @@ def connect(slug, config_loader):
         # By default send check50/style50 results back to submit.cs50.io
         remote = {
             "org": DEFAULT_PUSH_ORG,
-            "message": "Go to https://submit.cs50.io/users/{username}/{slug} to see your results.",
-            "callback": "https://submit.cs50.io/hooks/results"
+            "message": _("Go to {results} to see your results."),
+            "callback": "https://submit.cs50.io/hooks/results",
+            "results": "https://submit.cs50.io/{username}/{slug}"
         }
 
         remote.update(config.get("remote", {}))
@@ -275,48 +276,53 @@ def prepare(tool, branch, user, included):
     Stage files via lfs if necessary
     Check that atleast one file is staged
     """
-    with ProgressBar(_("Preparing")) as progress_bar, working_area(included) as area:
-        Git.working_area = f"-C {shlex.quote(str(area))}"
-        git = Git().set(Git.working_area)
-        # Clone just .git folder
-        try:
-            _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
-        except Error:
-            msg = _("Looks like {} isn't enabled for your account yet. ").format(tool)
-            if user.org != DEFAULT_PUSH_ORG:
-                msg += _("Please contact your instructor about this issue.")
-            else:
-                msg += _("Please go to {} in your web browser and try again.").format(AUTH_URL)
+    with working_area(included) as area:
+        with ProgressBar(_("Verifying")):
+            Git.working_area = f"-C {shlex.quote(str(area))}"
+            git = Git().set(Git.working_area)
+            # Clone just .git folder
+            try:
+                _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+            except Error:
+                msg = _("Make sure your username and/or password are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
+                if user.org != DEFAULT_PUSH_ORG:
+                    msg += _("please contact your instructor.")
+                else:
+                    msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
-            raise Error(msg)
+                msg += _((" If you're using GitHub two-factor authentication, you'll need to create and use a personal access token "
+                    "with the \"repo\" scope instead of your password. See https://cs50.ly/github-2fa for more information!"))
 
-        _run(git("config --bool core.bare false"))
-        _run(git("config --path core.worktree {area}", area=str(area)))
+                raise Error(msg)
 
-        try:
-            _run(git("checkout --force {branch} .gitattributes", branch=branch))
-        except Error:
-            pass
+        with ProgressBar(_("Preparing")) as progress_bar:
+            _run(git("config --bool core.bare false"))
+            _run(git("config --path core.worktree {area}", area=str(area)))
 
-        # Set user name/email in repo config
-        _run(git("config user.email {email}", email=user.email))
-        _run(git("config user.name {name}", name=user.name))
+            try:
+                _run(git("checkout --force {branch} .gitattributes", branch=branch))
+            except Error:
+                pass
 
-        # Switch to branch without checkout
-        _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
+            # Set user name/email in repo config
+            _run(git("config user.email {email}", email=user.email))
+            _run(git("config user.name {name}", name=user.name))
 
-        # Git add all included files
-        _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            # Switch to branch without checkout
+            _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
-        # Remove gitattributes from included
-        if Path(".gitattributes").exists() and ".gitattributes" in included:
-            included.remove(".gitattributes")
+            # Git add all included files
+            _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
 
-        # Add any oversized files through git-lfs
-        _lfs_add(included, git)
+            # Remove gitattributes from included
+            if Path(".gitattributes").exists() and ".gitattributes" in included:
+                included.remove(".gitattributes")
 
-        progress_bar.stop()
-        yield
+            # Add any oversized files through git-lfs
+            _lfs_add(included, git)
+
+            progress_bar.stop()
+            yield
 
 
 def upload(branch, user, tool, data):
@@ -548,19 +554,19 @@ class Slug:
                 self.problem = Path(remainder[len(branch) + 1:])
                 break
         else:
-            raise InvalidSlugError(_("Invalid slug: {}".format(self.slug)))
+            raise InvalidSlugError(_("Invalid slug: {}").format(self.slug))
 
     def _check_endings(self):
         """Check begin/end of slug, raises Error if malformed."""
         if self.slug.startswith("/") and self.slug.endswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the leading and trailing slashes?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the leading and trailing slashes?").format(self.slug.strip("/")))
         elif self.slug.startswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the leading slash?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the leading slash?").format(self.slug.strip("/")))
         elif self.slug.endswith("/"):
             raise InvalidSlugError(
-                _("Invalid slug. Did you mean {}, without the trailing slash?".format(self.slug.strip("/"))))
+                _("Invalid slug. Did you mean {}, without the trailing slash?").format(self.slug.strip("/")))
 
     def _get_branches(self):
         """Get branches from org/repo."""
@@ -757,7 +763,10 @@ def check_github_status():
     # If there is an indication of errors on GitHub's side
     for component in components:
         if component["status"] != "operational":
-            raise ConnectionError(_(f"Could not connect to GitHub. It looks like GitHub is having some issues with {component['name']}. Do check on https://www.githubstatus.com and try again later."))
+            raise ConnectionError(
+                _("Could not connect to GitHub. "
+                  "It looks like GitHub is having some issues with {}. "
+                  "Do check on https://www.githubstatus.com and try again later.").format(component['name']))
 
 
 def _lfs_add(files, git):
@@ -856,25 +865,6 @@ def _authenticate_https(org, repo=None):
         if password is None:
             username = _prompt_username(_("GitHub username: "))
             password = _prompt_password(_("GitHub password: "))
-
-        # Check if credentials are correct
-        res = requests.get("https://api.github.com/user", auth=(username, password.encode('utf8')))
-
-        # Check for 2-factor authentication https://developer.github.com/v3/auth/#working-with-two-factor-authentication
-        if "X-GitHub-OTP" in res.headers:
-            raise Error("Looks like you have two-factor authentication enabled!"
-                        " Please generate a personal access token (with GitHub's `repo` scope) and use it as your password."
-                        " See https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line for more info.")
-
-        if res.status_code != 200:
-            logger.info(res.headers)
-            logger.info(res.text)
-            raise Error(_("Invalid username and/or password.") if res.status_code ==
-                        401 else _("Could not authenticate user."))
-
-        # Canonicalize (capitalization of) username,
-        # Especially if user logged in via email address
-        username = res.json()["login"]
 
         # Credentials are correct, best cache them
         with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
