@@ -217,4 +217,3 @@ msgstr "{} no es una etiqueta válida para {}"
 
 #~ msgid "Could not authenticate user."
 #~ msgstr "No se pudo autenticar usuario."
-
