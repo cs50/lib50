@@ -32,7 +32,7 @@ msgstr "El slug no es válido para {}. ¿Quisiste entregar algo más?"
 
 #: lib50/_api.py:234
 msgid "Go to {results} to see your results."
-msgstr ""
+msgstr "Vaya a {results} para ver sus resultados."
 
 #: lib50/_api.py:246
 msgid "No files in this directory are expected for submission."
@@ -44,21 +44,23 @@ msgstr "Autenticando"
 
 #: lib50/_api.py:280
 msgid "Verifying"
-msgstr ""
+msgstr "Verificando"
 
 #: lib50/_api.py:287
 msgid ""
 "Make sure your username and/or password are valid and {} is enabled for "
 "your account. To enable {}, "
 msgstr ""
+"Asegúrese de que su nombre de usuario y/o contraseña sean válidos y {} "
+"esté habilitado para su cuenta. Para permitir {}, "
 
 #: lib50/_api.py:289
 msgid "please contact your instructor."
-msgstr ""
+msgstr "por favor contacte a su instructor."
 
 #: lib50/_api.py:291
 msgid "please go to {} in your web browser and try again."
-msgstr ""
+msgstr "por favor vaya a {} en su navegador de web e intente nuevamente."
 
 #: lib50/_api.py:298
 msgid "Preparing"
@@ -75,11 +77,13 @@ msgstr "confirmación automatizada por {}"
 #: lib50/_api.py:376
 #, fuzzy
 msgid "Invalid slug: {}. Did you mean something else?"
-msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
+msgstr "El slug no es válido: {}. ¿Quisiste entregar otra cosa?"
 
 #: lib50/_api.py:380
 msgid "Invalid slug: {}. Multiple configurations (both .yaml and .yml) found."
 msgstr ""
+"El slug no es válido: {}. Se encontraron múltiples configuraciones "
+"(tanto .yaml como .yml)."
 
 #: lib50/_api.py:465
 msgid "You don't have git. Install git, then re-run!"
@@ -121,13 +125,15 @@ msgstr "El slug no es válido. ¿Quisiste entregar algo más?"
 msgid ""
 "Could not connect to GitHub. Do make sure you are connected to the "
 "internet."
-msgstr ""
+msgstr "No se pudo conectar a GitHub. Asegúrate de estar conectado al internet."
 
 #: lib50/_api.py:767
 msgid ""
 "Could not connect to GitHub. It looks like GitHub is having some issues "
 "with {}. Do check on https://www.githubstatus.com and try again later."
 msgstr ""
+"No se pudo conectar a GitHub. Parece que GitHub está teniendo algunos problemas "
+"con {}. Verifique en https://www.githubstatus.com e intente nuevamente más tarde."
 
 #: lib50/_api.py:790
 msgid ""
@@ -211,6 +217,10 @@ msgstr "{} no es una etiqueta válida para {}"
 #~ "token-for-the-command-line for "
 #~ "more info."
 #~ msgstr ""
+#~ "¡Parece que tienes habilitada la autenticación de dos factores! "
+#~ "Por favor, genere un token de acceso personal y úselo como contraseña. "
+#~ "Consulte https://help.github.com/articles/creating-a-personal-access-"
+#~ "token-for-the-command-line para obtener más información."
 
 #~ msgid "Invalid username and/or password."
 #~ msgstr "Nombre de usuario y/o contraseña es inválido."
