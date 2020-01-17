@@ -63,15 +63,17 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    org, (included, excluded), message = connect(slug, config_loader)
+    remote, (included, excluded) = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
-    with authenticate(org, repo=repo) as user, prepare(tool, slug, user, included):
+    with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
         if prompt(included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
-            return username, commit_hash, message.format(username=username, slug=slug, commit_hash=commit_hash)
+            format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
+            message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
+            return username, commit_hash, message
         else:
             raise Error(_("No files were submitted."))
 
@@ -245,7 +247,7 @@ def connect(slug, config_loader):
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return remote["org"], (included, excluded), remote["message"]
+        return remote, (included, excluded)
 
 
 @contextlib.contextmanager
@@ -507,9 +509,7 @@ class Git:
         git_command = f"git {' '.join(git._args)}"
 
         # Format to show in git info
-        logged_command = git_command
-        for opt in [Git.cache, Git.working_area]:
-            logged_command = logged_command.replace(str(opt), "")
+        logged_command = f"git {' '.join(arg for arg in git._args if arg not in [str(git.cache), str(Git.working_area)])}"
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
