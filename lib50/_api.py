@@ -507,9 +507,7 @@ class Git:
         git_command = f"git {' '.join(git._args)}"
 
         # Format to show in git info
-        logged_command = git_command
-        for opt in [Git.cache, Git.working_area]:
-            logged_command = logged_command.replace(str(opt), "")
+        logged_command = f"git {' '.join(arg for arg in git._args if arg not in [str(git.cache), str(Git.working_area)])}"
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
