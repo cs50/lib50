@@ -505,13 +505,11 @@ class Git:
         git = self.set(command, **format_args)
 
         git_command = f"git {' '.join(git._args)}"
-        git_command = re.sub(' +', ' ', git_command)
 
         # Format to show in git info
         logged_command = git_command
         for opt in [Git.cache, Git.working_area]:
             logged_command = logged_command.replace(str(opt), "")
-        logged_command = re.sub(' +', ' ', logged_command)
 
         # Log pretty command in info
         logger.info(termcolor.colored(logged_command, attrs=["bold"]))
