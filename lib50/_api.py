@@ -235,7 +235,7 @@ def connect(slug, config_loader):
             "org": DEFAULT_PUSH_ORG,
             "message": _("Go to {results} to see your results."),
             "callback": "https://submit.cs50.io/hooks/results",
-            "results": "https://submit.cs50.io/{username}/{slug}"
+            "results": "https://submit.cs50.io/users/{username}/{slug}"
         }
 
         remote.update(config.get("remote", {}))
