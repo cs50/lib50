@@ -885,14 +885,14 @@ def _authenticate_https(org, repo=None):
 def _prompt_username(prompt="Username: "):
     """Prompt the user for username."""
     try:
-        username = input(prompt).strip()
         while True:
+            username = input(prompt).strip()
             if not username:
                 print("Username cannot be empty, please try again.")
             elif "@" in username:
                 print("Please enter your GitHub username, not email.")
-
-            return input(prompt).strip()
+            else:
+                return username
     except EOFError:
         print()
 
