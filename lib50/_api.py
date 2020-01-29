@@ -886,10 +886,13 @@ def _prompt_username(prompt="Username: "):
     """Prompt the user for username."""
     try:
         username = input(prompt).strip()
-        while not username:
-            print("Username cannot be empty, please try again.")
-            username = input(prompt).strip()
-        return username
+        while True:
+            if not username:
+                print("Username cannot be empty, please try again.")
+            elif "@" in username:
+                print("Please enter your GitHub username, not email.")
+
+            return input(prompt).strip()
     except EOFError:
         print()
 
