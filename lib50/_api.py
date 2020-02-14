@@ -821,7 +821,7 @@ def _authenticate_ssh(org, repo=None):
                           "Enter passphrase for key",
                           "Permission denied",
                           "Are you sure you want to continue connecting"])
-    except pexpect.TIMEOUT:
+    except (pexpect.EOF, pexpect.TIMEOUT):
         return None
 
 
