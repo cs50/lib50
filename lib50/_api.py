@@ -97,7 +97,13 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
     if not offline:
         # Get latest version of checks
         _run(git("fetch origin {branch}", branch=slug.branch))
+
+
+    # Tolerate checkout failure (e.g., when origin doesn't exist)
+    try:
         _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
+    except Error:
+        pass
 
     # Ensure that local copy of the repo is identical to remote copy
     _run(git("reset --hard HEAD"))
