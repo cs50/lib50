@@ -78,21 +78,21 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
             raise Error(_("No files were submitted."))
 
 
-def local(slug, offline=False):
+def local(slug, offline=False, remove_origin=False, github_token=None):
     """
     Create/update local copy of github.com/org/repo/branch.
     Returns path to local copy
     """
 
     # Parse slug
-    slug = Slug(slug, offline=offline)
+    slug = Slug(slug, offline=offline, github_token=github_token)
 
     local_path = get_local_path() / slug.org / slug.repo
 
     git = Git().set("-C {path}", path=str(local_path))
     if not local_path.exists():
         _run(Git()("init {path}", path=str(local_path)))
-        _run(git(f"remote add origin https://github.com/{slug.org}/{slug.repo}"))
+        _run(git(f"remote add origin {slug.origin}"))
 
     if not offline:
         # Get latest version of checks
@@ -101,6 +101,9 @@ def local(slug, offline=False):
     # Ensure that local copy of the repo is identical to remote copy
     _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
     _run(git("reset --hard HEAD"))
+
+    if remove_origin:
+        _run(git(f"remote remove origin"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -518,7 +521,7 @@ class Git:
 
 
 class Slug:
-    def __init__(self, slug, offline=False):
+    def __init__(self, slug, offline=False, github_token=None):
         """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
         self.slug = self.normalize_case(slug)
         self.offline = offline
@@ -534,6 +537,9 @@ class Slug:
         # Split slug in <org>/<repo>/<remainder>
         remainder = self.slug[idx + 1:]
         self.org, self.repo = self.slug.split("/")[:2]
+
+        credentials = f"{github_token}:x-oauth-basic@" if github_token else ""
+        self.origin = f"https://{credentials}github.com/{self.org}/{self.repo}"
 
         # Gather all branches
         try:
@@ -572,7 +578,7 @@ class Slug:
             local_path = get_local_path() / self.org / self.repo
             output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
         else:
-            cmd = f"git ls-remote --heads https://github.com/{self.org}/{self.repo}"
+            cmd = f"git ls-remote --heads {self.origin}"
             try:
                 with _spawn(cmd, timeout=3) as child:
                     output = child.read().strip().split("\r\n")
