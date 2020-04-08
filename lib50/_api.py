@@ -68,8 +68,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
 
-        # Show prompt if honesty is not false-y
-        if honesty and prompt(honesty, included, excluded):
+        # Show any prompt if specified
+        if prompt(honesty, included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
             format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
             message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
