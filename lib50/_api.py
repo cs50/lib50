@@ -45,7 +45,7 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True):
     """
     Push to github.com/org/repo=username/slug if tool exists.
     Returns username, commit hash
@@ -63,13 +63,13 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    remote, (included, excluded) = connect(slug, config_loader)
+    remote, (honesty, included, excluded) = connect(slug, config_loader)
 
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
-        if prompt(included, excluded):
+        if prompt(honesty, included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
             format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
             message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
@@ -248,6 +248,9 @@ def connect(slug, config_loader):
         }
 
         remote.update(config.get("remote", {}))
+        honesty = config.get("honesty", _("Keeping in mind the course's policy on "
+                                          "academic honesty, are you sure you want to "
+                                          "submit these files?"))
 
         # Figure out which files to include and exclude
         included, excluded = files(config.get("files"))
@@ -256,7 +259,9 @@ def connect(slug, config_loader):
         if not included:
             raise Error(_("No files in this directory are expected for submission."))
 
-        return remote, (included, excluded)
+
+        return remote, (honesty, included, excluded)
+
 
 
 @contextlib.contextmanager
