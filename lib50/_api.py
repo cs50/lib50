@@ -248,9 +248,7 @@ def connect(slug, config_loader):
         }
 
         remote.update(config.get("remote", {}))
-        honesty = config.get("honesty", _("Keeping in mind the course's policy on "
-                                          "academic honesty, are you sure you want to "
-                                          "submit these files?"))
+        honesty = config.get("honesty", True)
 
         # Figure out which files to include and exclude
         included, excluded = files(config.get("files"))
