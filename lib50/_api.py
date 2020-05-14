@@ -595,7 +595,7 @@ class Slug:
                     raise TimeoutError(3)
             except Error:
                 if "Could not resolve host" in child.before + child.buffer:
-                    raise TimeoutError(3)
+                    raise ConnectionError
                 raise
 
         # Parse get_refs output for the actual branch names
