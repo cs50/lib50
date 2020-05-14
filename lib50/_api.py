@@ -593,6 +593,10 @@ class Slug:
                     return []
                 else:
                     raise TimeoutError(3)
+            except Error:
+                if "Could not resolve host" in child.buffer:
+                    raise TimeoutError(3)
+                raise
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
