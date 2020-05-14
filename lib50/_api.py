@@ -594,7 +594,7 @@ class Slug:
                 else:
                     raise TimeoutError(3)
             except Error:
-                if "Could not resolve host" in child.buffer:
+                if "Could not resolve host" in child.before + child.buffer:
                     raise TimeoutError(3)
                 raise
 
