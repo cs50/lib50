@@ -554,6 +554,8 @@ class Slug:
             if not offline:
                 raise ConnectionError("Could not connect to GitHub, it seems you are offline.")
             branches = []
+        except ConnectionError:
+            raise
         except Error:
             branches = []
 
