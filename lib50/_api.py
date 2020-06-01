@@ -96,8 +96,18 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
 
 def local(slug, offline=False, remove_origin=False, github_token=None):
     """
-    Create/update local copy of github.com/org/repo/branch.
-    Returns path to local copy
+    Create/update local copy of the GitHub repo indentified by slug.
+
+    :param slug: the slug identifying a GitHub repo.
+    :type slug: str
+    :param offline: a flag that indicates whether the user is offline. If so, then the local copy is only checked, but not updated.
+    :type offline: bool, optional
+    :param remove_origin: a flag, that when set to True, will remove origin as a remote of the git repo.
+    :type remove_origin: bool, optional
+    :param github_token: a GitHub authentication token used to verify the slug, only needed if the slug identifies a private repo.
+    :type github_token: str, optional
+    :return: path to local copy
+    :type: pathlib.Path
     """
 
     # Parse slug
