@@ -176,7 +176,21 @@ def working_area(files, name=""):
 
 @contextlib.contextmanager
 def cd(dest):
-    """ Temporarily cd into a directory"""
+    """
+    A contextmanager for temporarily changing directory.
+
+    :param dest: the path to the directory
+    :type dest: str or pathlib.Path
+    :return: dest unchanged
+    :type: str or pathlib.Path
+
+    Example usage::
+
+        import os
+        with cd("foo") as current_dir:
+            print(os.getcwd())
+
+    """
     origin = os.getcwd()
     try:
         os.chdir(dest)
@@ -191,12 +205,40 @@ def files(patterns,
           exclude_tags=("exclude",),
           root="."):
     """
-    Takes a list of lib50._config.TaggedValue returns which files should be included and excluded from `root`.
-    Any pattern tagged with a tag
-        from include_tags will be included
-        from require_tags can only be a file, that will then be included. MissingFilesError is raised if missing
-        from exclude_tags will be excluded
-    Any pattern in always_exclude will always be excluded.
+    Based on a list of patterns (lib50.config.TaggedValue) determine which files should be included and excluded.
+    Any pattern tagged with a tag:
+
+    * from ``include_tags`` will be included
+    * from ``require_tags`` can only be a file, that will then be included. ``MissingFilesError`` is raised if missing.
+    * from ``exclude_tags`` will be excluded
+
+    :param patterns: patterns that are processed in order to determine which files should be included and excluded.
+    :type patterns: list of lib50.config.TaggedValue
+    :param require_tags: tags that identify a file as required and through that included
+    :type require_tags: list of strings, optional
+    :param include_tags: tags that identify a pattern as included
+    :type include_tags:  list of strings, optional
+    :param exclude_tags: tags that identify a pattern as excluded
+    :type exclude_tags: list of strings, optional
+    :param root: the root directory from which to look for files. Defaults to the current directory.
+    :type root: str or pathlib.Path, optional
+    :return: all included files and all excluded files
+    :type: tuple(set of strings, set of strings)
+
+    Example usage::
+
+        from lib50.config import TaggedValue
+
+        open("foo.py", "w").close()
+        open("bar.c", "w").close()
+        open("baz.h", "w").close()
+
+        patterns = [TaggedValue("*", "exclude"),
+                    TaggedValue("*.c", "include"),
+                    TaggedValue("baz.h", "require")]
+
+        print(files(patterns)) # prints ({'bar.c', 'baz.h'}, {'foo.py'})
+
     """
     require_tags = list(require_tags)
     include_tags = list(include_tags)
