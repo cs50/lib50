@@ -47,8 +47,24 @@ AUTH_URL = "https://submit.cs50.io"
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True):
     """
-    Push to github.com/org/repo=username/slug if tool exists.
-    Returns username, commit hash
+    Pushes to Github in name of a tool.
+    What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
+    By default, this function pushes to https://github.com/org=me50/repo=<username>/branch=<slug>.
+
+    :param tool: name of the tool that initialized the push
+    :type tool: str
+    :param slug: the slug identifying a .cs50.yml config file in a GitHub repo. This slug is also the branch in the student's repo to which this will push.
+    :type slug: str
+    :param config_loader: a config loader for the tool, being able to parse the .cs50.yml config file for the tool.
+    :type config_loader: lib50.config.ConfigLoader
+    :param repo: an alternative repo to push to, otherwise the default is used: github.com/me50/<github_login>
+    :type repo: str, optional
+    :param data: key value pairs that end up in the commit message. This can be used to communicate data with a backend.
+    :type data: dict of strings, optional
+    :param prompt: a prompt shown just before the push. In case this prompt returns false, the push is aborted. This lambda function has access to an honesty prompt configured in .cs50,yml, and all files that will be included and excluded in the push.
+    :type prompt: lambda str, list, list => bool, optional
+    :return: GitHub username and the commit hash
+    :type: tuple(str, str)
     """
 
     if data is None:
