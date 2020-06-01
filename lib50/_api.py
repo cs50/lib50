@@ -214,11 +214,11 @@ def files(patterns,
 
     :param patterns: patterns that are processed in order to determine which files should be included and excluded.
     :type patterns: list of lib50.config.TaggedValue
-    :param require_tags: tags that identify a file as required and through that included
+    :param require_tags: tags that mark a file as required and through that included
     :type require_tags: list of strings, optional
-    :param include_tags: tags that identify a pattern as included
+    :param include_tags: tags that mark a pattern as included
     :type include_tags:  list of strings, optional
-    :param exclude_tags: tags that identify a pattern as excluded
+    :param exclude_tags: tags that mark a pattern as excluded
     :type exclude_tags: list of strings, optional
     :param root: the root directory from which to look for files. Defaults to the current directory.
     :type root: str or pathlib.Path, optional
