@@ -148,9 +148,20 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 @contextlib.contextmanager
 def working_area(files, name=""):
     """
-    Copy all files to a temporary directory (the working area)
-    Optionally names the working area name
-    Returns path to the working area
+    A contextmanager that copies all files to a temporary directory (the working area)
+
+    :param files: all files to copy to the temporary directory
+    :type files: list of string(s) or pathlib.Path(s)
+    :param name: name of the temporary directory
+    :type name: str, optional
+    :return: path to the working area
+    :type: pathlib.Path
+
+    Example usage::
+
+        with working_area(["foo.c", "bar.py"], name="baz") as area:
+            print(list(area.glob("**/*")))
+
     """
     with tempfile.TemporaryDirectory() as dir:
         dir = Path(Path(dir) / name)
