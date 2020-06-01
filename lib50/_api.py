@@ -55,7 +55,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type tool: str
     :param slug: the slug identifying a .cs50.yml config file in a GitHub repo. This slug is also the branch in the student's repo to which this will push.
     :type slug: str
-    :param config_loader: a config loader for the tool, being able to parse the .cs50.yml config file for the tool.
+    :param config_loader: a config loader for the tool that is able to parse the .cs50.yml config file for the tool.
     :type config_loader: lib50.config.ConfigLoader
     :param repo: an alternative repo to push to, otherwise the default is used: github.com/me50/<github_login>
     :type repo: str, optional
@@ -212,7 +212,7 @@ def files(patterns,
     * from ``require_tags`` can only be a file, that will then be included. ``MissingFilesError`` is raised if missing.
     * from ``exclude_tags`` will be excluded
 
-    :param patterns: patterns that are processed in order to determine which files should be included and excluded.
+    :param patterns: patterns that are processed in order, to determine which files should be included and excluded.
     :type patterns: list of lib50.config.TaggedValue
     :param require_tags: tags that mark a file as required and through that included
     :type require_tags: list of strings, optional
@@ -300,9 +300,25 @@ def files(patterns,
 
 def connect(slug, config_loader):
     """
-    Ensure .cs50.yaml and tool key exists, raises Error otherwise
-    Check that all required files as per .cs50.yaml are present
-    Returns org, and a tuple of included and excluded files
+    Connects to a GitHub repo indentified by slug.
+    Then parses the ``.cs50.yml`` config file with the ``config_loader``.
+    If not all required files are present, per the ``files`` tag in ``.cs50.yml``, an ``Error`` is raised.
+
+    :param slug: the slug identifying a GitHub repo.
+    :type slug: str
+    :param config_loader: a config loader that is able to parse the .cs50.yml config file for a tool.
+    :type config_loader: lib50.config.ConfigLoader
+    :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
+    :type: tuple(dict, tuple(str, set, set))
+
+    Example usage::
+
+        import submit50
+
+        open("hello.c", "w").close()
+
+        remote, (honesty, included, excluded) = connect("cs50/problems/2019/x/hello", submit50.CONFIG_LOADER)
+
     """
     with ProgressBar(_("Connecting")):
         # Get the config from GitHub at slug
