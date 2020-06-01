@@ -159,6 +159,8 @@ def working_area(files, name=""):
 
     Example usage::
 
+        from lib50 import working_area
+
         with working_area(["foo.c", "bar.py"], name="baz") as area:
             print(list(area.glob("**/*")))
 
@@ -186,7 +188,9 @@ def cd(dest):
 
     Example usage::
 
+        from lib50 import cd
         import os
+
         with cd("foo") as current_dir:
             print(os.getcwd())
 
@@ -227,6 +231,7 @@ def files(patterns,
 
     Example usage::
 
+        from lib50 import files
         from lib50.config import TaggedValue
 
         open("foo.py", "w").close()
@@ -313,6 +318,7 @@ def connect(slug, config_loader):
 
     Example usage::
 
+        from lib50 import connect
         import submit50
 
         open("hello.c", "w").close()
