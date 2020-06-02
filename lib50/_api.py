@@ -520,8 +520,20 @@ def upload(branch, user, tool, data):
 def fetch_config(slug):
     """
     Fetch the config file at slug from GitHub.
-    Returns the unparsed json as a string.
-    Raises InvalidSlugError if there is no config file at slug.
+
+    :param slug: a slug identifying a location on GitHub to fetch the config from.
+    :type slug: str
+    :return: the config in the form of unparsed json
+    :type: str
+    :raises lib50.InvalidSlugError: if there is no config file at slug.
+
+    Example usage::
+
+        from lib50 import fetch_config
+
+        config = fetch_config("cs50/problems/2019/x/hello")
+        print(config)
+
     """
     # Parse slug
     slug = Slug(slug)
@@ -555,8 +567,23 @@ def fetch_config(slug):
 
 def get_local_slugs(tool, similar_to=""):
     """
-    Get all slugs for tool of lib50 has a local copy.
-    If similar_to is given, ranks local slugs by similarity to similar_to.
+    Get all slugs for tool of which lib50 has a local copy.
+    If similar_to is given, ranks and sorts local slugs by similarity to similar_to.
+
+    :param tool: tool for which to get the local slugs
+    :type tool: str
+    :param similar_to: ranks and sorts local slugs by similarity to this slug
+    :type similar_to: str, optional
+    :return: list of slugs
+    :type: list of strings
+
+    Example usage::
+
+        from lib50 import get_local_slugs
+
+        slugs = get_local_slugs("check50", similar_to="cs50/problems/2019/x/hllo")
+        print(slugs)
+
     """
     # Extract org and repo from slug to limit search
     similar_to = similar_to.strip("/")
