@@ -51,6 +51,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
     By default, this function pushes to https://github.com/org=me50/repo=<username>/branch=<slug>.
 
+    ``lib50.push`` executes the workflow: ``lib50.connect``, ``lib50.authenticate``, ``lib50.prepare`` and ``lib50.upload``.
+
     :param tool: name of the tool that initialized the push
     :type tool: str
     :param slug: the slug identifying a .cs50.yml config file in a GitHub repo. This slug is also the branch in the student's repo to which this will push.
@@ -65,8 +67,17 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type prompt: lambda str, list, list => bool, optional
     :return: GitHub username and the commit hash
     :type: tuple(str, str)
-    """
 
+    Example usage::
+
+        from lib50 import push
+        import submit50
+
+        name, hash = push("submit50", "cs50/problems/2019/x/hello", submit50.CONFIG_LOADER)
+        print(name)
+        print(hash)
+
+    """
     if data is None:
         data = {}
 
@@ -108,6 +119,14 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
     :type github_token: str, optional
     :return: path to local copy
     :type: pathlib.Path
+
+    Example usage::
+
+        from lib50 import local
+
+        path = local("cs50/problems/2019/x/hello")
+        print(list(path.glob("**/*")))
+        
     """
 
     # Parse slug
@@ -425,7 +444,7 @@ def prepare(tool, branch, user, included):
             tool = "submit50"
             branch = "cs50/problems/2019/x/hello"
             with prepare(tool, branch, user, ["hello.c"]):
-                upload(branch, user, tool, {tool:True})
+                upload(branch, user, tool, {})
 
     """
     with working_area(included) as area:
@@ -672,20 +691,33 @@ def check_dependencies():
 
 
 def logout():
+    """Log out from git."""
     _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
 
 
 @attr.s(slots=True)
 class User:
+    """An authenticated GitHub user that has write access to org/repo."""
     name = attr.ib()
     repo = attr.ib()
     org = attr.ib()
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
-                    init=False)
+                                         init=False)
 
 
 class Git:
+    """
+    A stateful helper class for formatting git commands.
+
+    To avoid confusion, and because these are not directly relevant to users,
+    the class variables ``cache`` and ``working_area`` are excluded from logs.
+
+    Example usage::
+
+        command = Git().set("-C {folder}", folder="foo")("git clone {repo}", repo="foo")
+        print(command)
+    """
     cache = ""
     working_area = ""
 
@@ -716,6 +748,25 @@ class Git:
 
 
 class Slug:
+    """
+    A CS50 slug that uniquely identifies a location on GitHub.
+
+    A slug is formatted as follows: <org>/<repo>/<branch>/<problem>
+    Both the branch and the problem can have an arbitrary number of slashes.
+    ``lib50.Slug`` performs validation on the slug, by querrying GitHub,
+    pulling in all branches, and then by finding a branch and problem that matches the slug.
+
+    Example usage::
+
+        from lib50._api import Slug
+
+        slug = Slug("cs50/problems/2019/x/hello")
+        print(slug.org)
+        print(slug.repo)
+        print(slug.branch)
+        print(slug.problem)
+
+    """
     def __init__(self, slug, offline=False, github_token=None):
         """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
         self.slug = self.normalize_case(slug)
@@ -794,6 +845,7 @@ class Slug:
 
     @staticmethod
     def normalize_case(slug):
+        """Normalize the case of a slug in string form"""
         parts = slug.split("/")
         if len(parts) < 3:
             raise InvalidSlugError(_("Invalid slug"))
@@ -884,6 +936,7 @@ class _StreamToLogger:
 
 @contextlib.contextmanager
 def _spawn(command, quiet=False, timeout=None):
+    """Run (spawn) a command with `pexpect.spawn`"""
     # Spawn command
     child = pexpect.spawn(
         command,
@@ -944,6 +997,7 @@ def _glob(pattern, skip_dirs=False):
 
 
 def _match_files(universe, pattern):
+    """From a universe of files, get just those files that match the pattern."""
     # Implicit recursive iff no / in pattern and starts with *
     if "/" not in pattern and pattern.startswith("*"):
         pattern = f"**/{pattern}"
