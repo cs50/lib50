@@ -17,15 +17,22 @@ def load_private_key(pem_str, password=None):
 
 def verify(payload, signature, public_key):
     """
-    Verify payload using (base64 encoded) signature and verification key. verification_key should be obtained from load_public_key
+    Verify payload using (base64 encoded) signature and verification key. public_key should be obtained from load_public_key
     Uses RSA-PSS with SHA-512 and maximum salt length.
     The corresponding openssl command to create signatures that this function can verify is:
 
-    openssl dgst -sha512 -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:-2 -sign <PRIVATE_KEY> <PAYLOAD> | openssl base64 -A
+    ::
 
-    returns a boolean that is true iff the payload could be verified
+        openssl dgst -sha512 -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:-2 -sign <PRIVATE_KEY> <PAYLOAD> | openssl base64 -A
+
+    :param payload: the payload
+    :type payload: str
+    :param signature: base64 encoded signature
+    :type signature: bytes
+    :param public_key: a public key from ``lib50.crypto.load_public_key``
+    :return: True iff the payload could be verified
+    :type: bool
     """
-
     try:
         public_key.verify(signature=base64.b64decode(signature),
                           data=payload,
