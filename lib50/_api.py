@@ -58,7 +58,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :param slug: the slug identifying a .cs50.yml config file in a GitHub repo. This slug is also the branch in the student's repo to which this will push.
     :type slug: str
     :param config_loader: a config loader for the tool that is able to parse the .cs50.yml config file for the tool.
-    :type config_loader: lib50.config.ConfigLoader
+    :type config_loader: lib50.config.Loader
     :param repo: an alternative repo to push to, otherwise the default is used: github.com/me50/<github_login>
     :type repo: str, optional
     :param data: key value pairs that end up in the commit message. This can be used to communicate data with a backend.
@@ -331,7 +331,7 @@ def connect(slug, config_loader):
     :param slug: the slug identifying a GitHub repo.
     :type slug: str
     :param config_loader: a config loader that is able to parse the .cs50.yml config file for a tool.
-    :type config_loader: lib50.config.ConfigLoader
+    :type config_loader: lib50.config.Loader
     :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
     :type: tuple(dict, tuple(str, set, set))
     :raises lib50.InvalidSlugError: if the slug is invalid for the tool

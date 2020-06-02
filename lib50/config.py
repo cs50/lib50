@@ -1,3 +1,5 @@
+"""An API for retrieving and parsing ``.cs50.yml`` configs."""
+
 import collections
 import enum
 
@@ -17,11 +19,27 @@ def get_config_filepath(path):
     """
     Looks for the following files in order at path:
 
-    * .cs50.yaml
-    * .cs50.yml
+    * ``.cs50.yaml``
+    * ``.cs50.yml``
 
-    If either exists, returns path to that file (i.e. <path>/.cs50.yaml or <path>/.cs50.yml)
-    Raises errors.Error otherwise.
+    If only one exists, returns path to that file (i.e. ``<path>/.cs50.yaml`` or ``<path>/.cs50.yml``)
+    Raises ``lib50.Error`` otherwise.
+
+    :param path: local path to a ``.cs50.yml`` config file
+    :type path: str or pathlib.Path
+    :return: path to the config file
+    :type: pathlib.Path
+    :raises lib50.Error: if zero or more than one config files exist
+
+    Example usage::
+
+        from lib50 import local
+        from lib50.config import get_config_filepath
+
+        path = local("cs50/problems/2019/x/hello")
+        config_path = get_config_filepath(path)
+        print(config_path)
+
     """
     path = pathlib.Path(path)
 
@@ -38,8 +56,14 @@ def get_config_filepath(path):
 
 
 class TaggedValue:
-    """A value tagged in a .yaml file"""
+    """A value tagged in a ``.yml`` file"""
     def __init__(self, value, tag):
+        """
+        :param value: the tagged value
+        :type value: str
+        :param tag: the yaml tag, with or without the syntactically required ``!``
+        :type tag: str
+        """
         self.value = value
         self.tag = tag[1:] if tag.startswith("!") else tag
 
@@ -48,9 +72,45 @@ class TaggedValue:
 
 
 class Loader:
-    class _TaggedYamlValue:
-        """A value tagged in a .yaml file"""
+    """
+    A config loader (parser) that can parse a tools section of ``.cs50.yml`` config files.
 
+    The loader can be configured to parse and validate custom yaml tags.
+    These tags can be global, in which case they can occur anywhere in a tool's section.
+    Or scoped to a top level key within a tool's section, in which case these tags can only occur there.
+
+    Tags can also have defaults.
+    In which case there does not need to be a value next to the tag in the config file.
+
+    Example usage::
+
+        from lib50 import local
+        from lib50.config import Loader, get_config_filepath
+
+        # Get a local config file
+        path = local("cs50/problems/2019/x/hello")
+        config_path = get_config_filepath(path)
+
+        # Create a loader for the tool submit50
+        loader = Loader("submit50")
+
+        # Allow the tags include/exclude/require to exist only within the files key of submit50
+        loader.scope("files", "include", "exclude", "require")
+
+        # Load, parse and validate the config file
+        with open(config_path) as f:
+            config = loader.load(f.read())
+
+        print(config)
+
+    """
+
+    class _TaggedYamlValue:
+        """
+        A value tagged in a .yaml file.
+        This is effectively an extension of TaggedValue that keeps track of all possible tags.
+        This only exists for purposes of validation within ``Loader``.
+        """
         def __init__(self, value, tag, *tags):
             """
             value - the actual value
@@ -74,13 +134,33 @@ class Loader:
 
 
     def __init__(self, tool, *global_tags, default=None):
+        """
+        :param tool: the tool for which to load
+        :type tool: str
+        :param global_tags: any tags that can be applied globally (within the tool's section)
+        :type global_tags: str
+        :param default: a default value for global tags
+        :type default: anything, optional
+        """
         self._global_tags = self._ensure_exclamation(global_tags)
         self._global_default = default if not default or default.startswith("!") else "!" + default
         self._scopes = collections.defaultdict(list)
         self.tool = tool
 
     def scope(self, key, *tags, default=None):
-        """Only apply tags and default for top-level key, effectively scoping the tags."""
+        """
+        Only apply tags and default for top-level key of the tool's section.
+        This effectively scopes the tags to just that top-level key.
+
+        :param key: the top-level key
+        :type key: str
+        :param tags: any tags that can be applied within the top-level key
+        :type tags: str
+        :param default: a default value for these tags
+        :type default: anything, optional
+        :return: None
+        :type: None
+        """
         scope = self._scopes[key]
         tags = self._ensure_exclamation(tags)
         default = default if not default or default.startswith("!") else "!" + default
@@ -93,7 +173,18 @@ class Loader:
             scope.append(default)
 
     def load(self, content, validate=True):
-        """Parse yaml content."""
+        """
+        Parse yaml content.
+
+        :param content: the content of a config file
+        :type content: str
+        :param validate: if set to ``False``, no validation will be performed. Tags can then occur anywhere.
+        :type validate: bool
+        :return: the parsed config
+        :type: dict
+        :raises lib50.InvalidConfigError: in case a tag is misplaced, or the content is not valid yaml.
+        :raises lib50.MissingToolError: in case the tool does not occur in the content.
+        """
         # Try parsing the YAML with global tags
         try:
             config = yaml.load(content, Loader=self._loader(self._global_tags))
@@ -234,4 +325,5 @@ class Loader:
 
     @staticmethod
     def _ensure_exclamation(tags):
+        """Places an exclamation mark for each tag that does not already have one"""
         return [tag if tag.startswith("!") else "!" + tag for tag in tags]
