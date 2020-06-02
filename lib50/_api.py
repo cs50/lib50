@@ -362,13 +362,25 @@ def connect(slug, config_loader):
         return remote, (honesty, included, excluded)
 
 
-
 @contextlib.contextmanager
 def authenticate(org, repo=None):
     """
-    Authenticate with GitHub via SSH if possible
-    Otherwise authenticate via HTTPS
-    Returns an authenticated User
+    A contextmanager that authenticates a user with GitHub via SSH if possible, otherwise via HTTPS.
+
+    :param org: GitHub organisation to authenticate with
+    :type org: str
+    :param repo: GitHub repo (part of the org) to authenticate with. Default is the user's GitHub login.
+    :type repo: str, optional
+    :return: an authenticated user
+    :type: lib50.User
+
+    Example usage::
+
+        from lib50 import authenticate
+
+        with authenticate("me50") as user:
+            print(user.name)
+
     """
     with ProgressBar(_("Authenticating")) as progress_bar:
         user = _authenticate_ssh(org, repo=repo)
@@ -384,12 +396,35 @@ def authenticate(org, repo=None):
 @contextlib.contextmanager
 def prepare(tool, branch, user, included):
     """
-    Prepare git for pushing
-    Check that there are no permission errors
-    Add necessities to git config
-    Stage files
-    Stage files via lfs if necessary
-    Check that atleast one file is staged
+    A contextmanager that prepares git for pushing:
+
+    * Check that there are no permission errors
+    * Add necessities to git config
+    * Stage files
+    * Stage files via lfs if necessary
+    * Check that atleast one file is staged
+
+    :param tool: name of the tool that started the push
+    :type tool: str
+    :param branch: git branch to switch to
+    :type branch: str
+    :param user: the user who has access to the repo, and will ultimately author a commit
+    :type user: lib50.User
+    :param included: a list of files that are to be staged in git
+    :type included: list of string(s) or pathlib.Path(s)
+    :return: None
+    :type: None
+
+    Example usage::
+
+        from lib50 import authenticate, prepare, upload
+
+        with authenticate("me50") as user:
+            tool = "submit50"
+            branch = "cs50/problems/2019/x/hello"
+            with prepare(tool, branch, user, ["hello.c"]):
+                upload(branch, user, tool, {tool:True})
+
     """
     with working_area(included) as area:
         with ProgressBar(_("Verifying")):
@@ -442,8 +477,29 @@ def prepare(tool, branch, user, included):
 
 def upload(branch, user, tool, data):
     """
-    Commit + push to branch
-    Returns username, commit hash
+    Commit + push to a branch
+
+    :param branch: git branch to commit and push to
+    :type branch: str
+    :param user: authenticated user who can push to the repo and branch
+    :type user: lib50.User
+    :param tool: name of the tool that started the push
+    :type tool: str
+    :param data: key value pairs that end up in the commit message. This can be used to communicate data with a backend.
+    :type data: dict of strings
+    :return: username and commit hash
+    :type: tuple(str, str)
+
+    Example usage::
+
+        from lib50 import authenticate, prepare, upload
+
+        with authenticate("me50") as user:
+            tool = "submit50"
+            branch = "cs50/problems/2019/x/hello"
+            with prepare(tool, branch, user, ["hello.c"]):
+                upload(branch, user, tool, {tool:True})
+
     """
 
     with ProgressBar(_("Uploading")):
