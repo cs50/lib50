@@ -315,6 +315,8 @@ def connect(slug, config_loader):
     :type config_loader: lib50.config.ConfigLoader
     :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
     :type: tuple(dict, tuple(str, set, set))
+    :raises lib50.InvalidSlugError: if the slug is invalid for the tool
+    :raises lib50.Error: if no files are staged. For instance the slug expects .c files, but there are only .py files present.
 
     Example usage::
 
@@ -356,7 +358,7 @@ def connect(slug, config_loader):
 
         # Check that at least 1 file is staged
         if not included:
-            raise Error(_("No files in this directory are expected for submission."))
+            raise Error(_("No files in this directory are expected by {}.".format(slug)))
 
 
         return remote, (honesty, included, excluded)
