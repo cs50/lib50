@@ -805,11 +805,30 @@ class Slug:
 
 
 class ProgressBar:
-    """Show a progress bar starting with message."""
+    """
+    A contextmanager that shows a progress bar starting with message.
+
+    Example usage::
+
+        from lib50 import ProgressBar
+        import time
+
+        with ProgressBar("uploading") as bar:
+            time.sleep(5)
+            bar.stop()
+            time.sleep(5)
+
+    """
     DISABLED = False
     TICKS_PER_SECOND = 2
 
     def __init__(self, message, output_stream=None):
+        """
+        :param message: the message of the progress bar, what the user is waiting on
+        :type message: str
+        :param output_stream: a stream to write the progress bar to
+        :type output_stream: a stream or file-like object
+        """
 
         if output_stream is None:
             output_stream = sys.stderr
@@ -948,10 +967,13 @@ def get_content(org, repo, branch, filepath):
 
 def check_github_status():
     """
-    Pings the githubstatus API. Raises an Error if the Git Operations and/or
+    Pings the githubstatus API. Raises a ConnectionError if the Git Operations and/or
     API requests components show an increase in errors.
-    """
 
+    :return: None
+    :type: None
+    :raises lib50.ConnectionError: if the Git Operations and/or API requests components show an increase in errors.
+    """
     # https://www.githubstatus.com/api
     status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json")
 
