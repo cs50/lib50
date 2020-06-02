@@ -126,7 +126,7 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 
         path = local("cs50/problems/2019/x/hello")
         print(list(path.glob("**/*")))
-        
+
     """
 
     # Parse slug
@@ -691,7 +691,12 @@ def check_dependencies():
 
 
 def logout():
-    """Log out from git."""
+    """
+    Log out from git.
+
+    :return: None
+    :type: None
+    """
     _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
 
 
