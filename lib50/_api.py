@@ -228,7 +228,7 @@ def files(patterns,
           exclude_tags=("exclude",),
           root="."):
     """
-    Based on a list of patterns (lib50.config.TaggedValue) determine which files should be included and excluded.
+    Based on a list of patterns (``lib50.config.TaggedValue``) determine which files should be included and excluded.
     Any pattern tagged with a tag:
 
     * from ``include_tags`` will be included
