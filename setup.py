@@ -18,6 +18,9 @@ setup(
     license="GPLv3",
     description="This is lib50, CS50's own internal library used in many of its tools.",
     install_requires=["attrs>=18.1,<20", "pexpect>=4.6,<5", "pyyaml>=3.10,<6", "requests>=2.13,<3", "termcolor>=1.1,<2", "jellyfish>=0.7,<1", "cryptography>=2.7"],
+    extras_require = {
+        "develop": ["sphinx", "sphinx-autobuild", "sphinx_rtd_theme"]
+    },
     keywords=["lib50"],
     name="lib50",
     python_requires=">= 3.6",
