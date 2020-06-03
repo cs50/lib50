@@ -1,3 +1,5 @@
+"""An API for verifying signed payloads such as check50 results."""
+
 import base64
 
 from cryptography.exceptions import InvalidSignature
@@ -8,10 +10,42 @@ from cryptography.hazmat.backends import default_backend
 from ._errors import InvalidSignatureError
 
 def load_public_key(pem_str):
+    """
+    Load a public key from a PEM string.
+
+    "PEM is an encapsulation format, meaning keys in it can actually be any of several different key types.
+    However these are all self-identifying, so you don’t need to worry about this detail.
+    PEM keys are recognizable because they all begin with
+    ``-----BEGIN {format}-----`` and end with ``-----END {format}-----``."
+
+    - source: https://cryptography.io/en/latest/hazmat/primitives/asymmetric/serialization/#pem
+
+    :param pem_str: the public key to load in PEM format
+    :type pem_str: str
+    :return: a key from ``cryptography.hazmat``
+    :type: One of RSAPrivateKey, DSAPrivateKey, DHPrivateKey, or EllipticCurvePrivateKey
+    """
     return serialization.load_pem_public_key(pem_str, backend=default_backend())
 
 
 def load_private_key(pem_str, password=None):
+    """
+    Load a private key from a PEM string.
+
+    "PEM is an encapsulation format, meaning keys in it can actually be any of several different key types.
+    However these are all self-identifying, so you don’t need to worry about this detail.
+    PEM keys are recognizable because they all begin with
+    ``-----BEGIN {format}-----`` and end with ``-----END {format}-----``."
+
+    - source: https://cryptography.io/en/latest/hazmat/primitives/asymmetric/serialization/#pem
+
+    :param pem_str: the private key to load in PEM format
+    :type pem_str: str
+    :param password: a password to decode the pem_str
+    :type password: str, optional
+    :return: a key from ``cryptography.hazmat``
+    :type: One of RSAPrivateKey, DSAPrivateKey, DHPrivateKey, or EllipticCurvePrivateKey
+    """
     return serialization.load_pem_private_key(pem_str, password=password, backend=default_backend())
 
 
@@ -47,6 +81,15 @@ def verify(payload, signature, public_key):
 
 
 def sign(payload, private_key):
+    """
+    Sign a payload with a private key.
+
+    :param payload: the payload
+    :type payload: str
+    :param private_key: a private key from ``lib50.crypto.load_private_key``
+    :return: base64 encoded signature
+    :type: bytes
+    """
     return base64.b64encode(
         private_key.sign(data=payload,
                          padding=padding.PSS(
