@@ -1,3 +1,6 @@
+build:
+  image: latest
+
 python:
   version: 3.7
   install:
@@ -5,12 +8,8 @@ python:
       path: .
       extra_requirements:
         - develop
-    - method: setuptools
-      path: .
 
 sphinx:
   builder: dirhtml
-  configuration: docs/source/conf.py
-  fail_on_warning: false
 
 version: 2
