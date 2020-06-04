@@ -761,6 +761,14 @@ class Slug:
     ``lib50.Slug`` performs validation on the slug, by querrying GitHub,
     pulling in all branches, and then by finding a branch and problem that matches the slug.
 
+    :ivar str org: the GitHub organization
+    :ivar str repo: the GitHub repo
+    :ivar str branch: the branch in the repo
+    :ivar str problem: path to the problem, the directory containing ``.cs50.yml``
+    :ivar str slug: string representation of the slug
+    :ivar bool offline: flag signalling whether the user is offline. If set to True, the slug is parsed locally.
+    :ivar str origin: GitHub url for org/repo including authentication.
+
     Example usage::
 
         from lib50._api import Slug

@@ -4,7 +4,12 @@ from . import _
 __all__ = ["Error", "InvalidSlugError", "MissingFilesError", "InvalidConfigError", "MissingToolError", "TimeoutError", "ConnectionError"]
 
 class Error(Exception):
-    """A generic lib50 Error. lib50 Errors can carry arbitrary data in the dict ``Error.payload``,"""
+    """
+    A generic lib50 Error.
+
+    :ivar dict payload: arbitrary data
+
+    """
     def __init__(self, *args, **kwargs):
         """"""
         super().__init__(*args, **kwargs)
