@@ -108,6 +108,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
 def local(slug, offline=False, remove_origin=False, github_token=None):
     """
     Create/update local copy of the GitHub repo indentified by slug.
+    The local copy is shallow and single branch, it contains just the last commit on the branch identified by the slug.
 
     :param slug: the slug identifying a GitHub repo.
     :type slug: str
@@ -142,7 +143,6 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
     if not offline:
         # Get latest version of checks
         _run(git("fetch origin {branch} --depth 1", branch=slug.branch))
-
 
     # Tolerate checkout failure (e.g., when origin doesn't exist)
     try:
