@@ -108,6 +108,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
 def local(slug, offline=False, remove_origin=False, github_token=None):
     """
     Create/update local copy of the GitHub repo indentified by slug.
+    The local copy is shallow and single branch, it contains just the last commit on the branch identified by the slug.
 
     :param slug: the slug identifying a GitHub repo.
     :type slug: str
@@ -141,8 +142,7 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 
     if not offline:
         # Get latest version of checks
-        _run(git("fetch origin {branch}", branch=slug.branch))
-
+        _run(git("fetch origin --depth 1 {branch}", branch=slug.branch))
 
     # Tolerate checkout failure (e.g., when origin doesn't exist)
     try:
@@ -453,7 +453,11 @@ def prepare(tool, branch, user, included):
             git = Git().set(Git.working_area)
             # Clone just .git folder
             try:
-                _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+                clone_command = f"clone --bare --single-branch {user.repo} .git"
+                try:
+                    _run(git.set(Git.cache)(f"{clone_command} --branch {branch}"))
+                except Error:
+                    _run(git.set(Git.cache)(clone_command))
             except Error:
                 msg = _("Make sure your username and/or password are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
                 if user.org != DEFAULT_PUSH_ORG:
