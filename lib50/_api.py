@@ -453,10 +453,11 @@ def prepare(tool, branch, user, included):
             git = Git().set(Git.working_area)
             # Clone just .git folder
             try:
+                git_command = f"clone --bare --single-branch {user.repo} .git"
                 try:
-                    _run(git.set(Git.cache)("clone --bare --single-branch --branch {branch} {repo} .git", repo=user.repo, branch=branch))
+                    _run(git.set(Git.cache)(f"{git_command} --branch {branch}"))
                 except Error:
-                    _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+                    _run(git.set(Git.cache)(git_command))
             except Error:
                 msg = _("Make sure your username and/or password are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
                 if user.org != DEFAULT_PUSH_ORG:
