@@ -141,7 +141,7 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 
     if not offline:
         # Get latest version of checks
-        _run(git("fetch origin {branch}", branch=slug.branch))
+        _run(git("fetch origin {branch} --depth 1", branch=slug.branch))
 
 
     # Tolerate checkout failure (e.g., when origin doesn't exist)
