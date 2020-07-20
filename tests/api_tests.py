@@ -233,6 +233,69 @@ class TestPromptPassword(unittest.TestCase):
         self.assertEqual(password, "♣€")
         self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
 
+    def test_ctrl_c(self):
+        f = io.StringIO()
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write(bytes(f"{chr(3)}".encode("utf8")))
+            sys.stdin.seek(0)
+
+            with self.assertRaises(KeyboardInterrupt):
+                password = lib50._api._prompt_password()
+
+class TestPromptUsername(unittest.TestCase):
+    @contextlib.contextmanager
+    def replace_stdin(self):
+        old = sys.stdin
+        try:
+            with io.StringIO() as stdin_s:
+                sys.stdin = stdin_s
+                sys.stdin.buffer = sys.stdin
+                yield sys.stdin
+        finally:
+            sys.stdin = old
+
+    @contextlib.contextmanager
+    def mock_no_echo_stdin(self):
+        @contextlib.contextmanager
+        def mock():
+            yield
+
+        old = lib50._api._no_echo_stdin
+        try:
+            lib50._api._no_echo_stdin = mock
+            yield mock
+        finally:
+            lib50._api._no_echo_stdin = old
+
+    def test_email(self):
+        f = io.StringIO()
+
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write("foo@bar\n")
+            sys.stdin.seek(0)
+            lib50._api._prompt_username()
+
+            self.assertTrue("not email" in f.getvalue())
+    
+    def test_empty(self):
+        f = io.StringIO()
+
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write("\n")
+            sys.stdin.seek(0)
+            lib50._api._prompt_username()
+
+            self.assertTrue("Username cannot be empty" in f.getvalue())
+
+    def test_valid(self):
+        f = io.StringIO()
+
+        with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
+            sys.stdin.write("foo\n")
+            sys.stdin.seek(0)
+            username = lib50._api._prompt_username()
+
+            self.assertEqual(username, "foo")
 
 class TestGetLocalSlugs(unittest.TestCase):
     def setUp(self):

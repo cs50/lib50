@@ -8,6 +8,11 @@ import lib50._errors
 import lib50.config
 
 class TestLoader(unittest.TestCase):
+    def test_invalid_yaml(self):
+        content = "'"
+        with self.assertRaises(lib50._errors.InvalidConfigError):
+            config = lib50.config.Loader("check50").load(content)
+
     def test_no_tool(self):
         content = ""
         with self.assertRaises(lib50._errors.MissingToolError):
