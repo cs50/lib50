@@ -487,7 +487,7 @@ def prepare(tool, branch, user, included):
             _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
             # Split included files into sublists of OS-friendly lengths
-            included_groups = [included[i:i + n] for i in range(0, len(included), 32700)]
+            included_groups = [included[i:i + 32700] for i in range(0, len(included), 32700)]
 
             # Git add all included files
             for included in included_groups:
