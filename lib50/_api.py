@@ -490,8 +490,8 @@ def prepare(tool, branch, user, included):
             included_groups = [included[i:i + 32700] for i in range(0, len(included), 32700)]
 
             # Git add all included files
-            for included in included_groups:
-                _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            for group in included_groups:
+                _run(git(f"add -f {' '.join(shlex.quote(f) for f in group)}"))
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
