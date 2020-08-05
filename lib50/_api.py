@@ -486,8 +486,12 @@ def prepare(tool, branch, user, included):
             # Switch to branch without checkout
             _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
+            # Split included files into sublists of OS-friendly lengths
+            included_groups = [included[i:i + n] for i in range(0, len(included), 32700)]
+
             # Git add all included files
-            _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            for included in included_groups:
+                _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
