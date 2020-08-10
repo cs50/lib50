@@ -486,12 +486,24 @@ def prepare(tool, branch, user, included):
             # Switch to branch without checkout
             _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
-            # Split included files into sublists of OS-friendly lengths
-            included_groups = [included[i:i + 32700] for i in range(0, len(included), 32700)]
+            # Get the command line length limit, if available
+            try:
+                cl_limit = int(_run("getconf ARG_MAX")) // 16
+            except:
+                cl_limit = 131072
 
-            # Git add all included files
-            for group in included_groups:
-                _run(git(f"add -f {' '.join(shlex.quote(f) for f in group)}"))
+            # Initialize slice start index and command length (at 60 to allow other args)
+            start = 0
+            cl_len = 60
+
+            # Git add all included files in batches based on command length limit
+            for i, fl in enumerate(included):
+                if cl_len >= cl_limit:
+                    _run(git(f"add -f {' '.join(shlex.quote(f) for f in included[start:i])}"))
+                    cl_len = 60
+                    start = i
+
+                cl_len += len(fl) + 1
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
