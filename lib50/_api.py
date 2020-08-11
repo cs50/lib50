@@ -490,20 +490,34 @@ def prepare(tool, branch, user, included):
             try:
                 cl_limit = int(_run("getconf ARG_MAX")) // 16
             except:
-                cl_limit = 131072
+                cl_limit = None
 
-            # Initialize slice start index and command length (at 60 to allow other args)
-            start = 0
-            cl_len = 60
+            # If no CL limit available, add all the files
+            if cl_limit is None:
+                _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            else:
+                # Initialize slice start index and command length
+                start = 0
+                cl_len = len("git ") + len(" ".join(shlex.quote(a) for a in git.get_args()))
 
-            # Git add all included files in batches based on command length limit
-            for i, fl in enumerate(included):
-                if cl_len >= cl_limit:
-                    _run(git(f"add -f {' '.join(shlex.quote(f) for f in included[start:i])}"))
-                    cl_len = 60
-                    start = i
+                # Git add all included files in batches based on command length limit
+                for i, fl in enumerate(included):
+                    if cl_len >= cl_limit or i + 1 == len(included):
+                        # Determine the cutoff index
+                        last = None if i + 1 == len(included) else i - 1
 
-                cl_len += len(fl) + 1
+                        # Handle the case of the last item not being quoted
+                        included[i] = shlex.quote(fl)
+
+                        # Run the command
+                        _run(git(f"add -f {' '.join(included[start:last])}"))
+
+                        cl_len = 60
+                        start = i
+
+                    # Quote this file name; count the length of that plus a space
+                    included[i] = shlex.quote(fl)
+                    cl_len += len(included[i]) + 1
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -748,6 +762,9 @@ class Git:
 
     def __init__(self):
         self._args = []
+
+    def get_args(self):
+        return self._args
 
     def set(self, git_arg, **format_args):
         """git = Git().set("-C {folder}", folder="foo")"""
