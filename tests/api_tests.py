@@ -243,7 +243,7 @@ class TestGetLocalSlugs(unittest.TestCase):
         os.makedirs(path)
         with open(path / ".cs50.yml", "w") as f:
             f.write("foo50: true\n")
-        pexpect.run(f"git -C {path.parent.parent} init")
+        pexpect.run(f"git -C {path.parent.parent} init -b main")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
         self.debug_output = []
