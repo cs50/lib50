@@ -110,7 +110,7 @@ class TestSlug(unittest.TestCase):
             os.makedirs(path)
 
             os.chdir(pathlib.Path(lib50.get_local_path()) / "foo" / "bar")
-            subprocess.check_output(["git", "init"])
+            subprocess.check_output(["git", "init", "-b", "main"])
 
             os.chdir(path)
 
@@ -119,11 +119,11 @@ class TestSlug(unittest.TestCase):
             subprocess.check_output(["git", "add", ".cs50.yaml"])
             out = subprocess.check_output(["git", "commit", "-m", "\"qux\""])
 
-            slug = lib50._api.Slug("foo/bar/master/baz", offline=True)
-            self.assertEqual(slug.slug, "foo/bar/master/baz")
+            slug = lib50._api.Slug("foo/bar/main/baz", offline=True)
+            self.assertEqual(slug.slug, "foo/bar/main/baz")
             self.assertEqual(slug.org, "foo")
             self.assertEqual(slug.repo, "bar")
-            self.assertEqual(slug.branch, "master")
+            self.assertEqual(slug.branch, "main")
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
             lib50.set_local_path(old_local_path)
@@ -256,7 +256,7 @@ class TestGetLocalSlugs(unittest.TestCase):
     def test_one_local_slug(self):
         slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
-        self.assertEqual(slugs[0], "foo/bar/master/baz")
+        self.assertEqual(slugs[0], "foo/bar/main/baz")
 
 
 if __name__ == '__main__':
