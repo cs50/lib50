@@ -44,7 +44,8 @@ _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
-DEFAULT_FILE_LIMIT = 100
+
+DEFAULT_FILE_LIMIT = 10000
 
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT):
@@ -67,6 +68,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type data: dict of strings, optional
     :param prompt: a prompt shown just before the push. In case this prompt returns false, the push is aborted. This lambda function has access to an honesty prompt configured in .cs50,yml, and all files that will be included and excluded in the push.
     :type prompt: lambda str, list, list => bool, optional
+    :param file_limit: maximum number of files to be matched by any globbing pattern.
+    :type file_limit: int
     :return: GitHub username and the commit hash
     :type: tuple(str, str)
 

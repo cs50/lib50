@@ -62,7 +62,7 @@ class TooManyFilesError(Error):
             dir = os.path.expanduser(os.getcwd())
 
         super().__init__("{}\n{}".format(
-            _("Looks like you are attempting to include too many (> {}) files.").format(limit),
+            _("Looks like you are in a directory with too many (> {}) files.").format(limit),
             _("You are currently in: {}, did you perhaps intend another directory?".format(dir))
         ))
         self.payload.update(limit=limit, dir=dir)
