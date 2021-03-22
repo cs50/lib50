@@ -45,10 +45,10 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-DEFAULT_GLOB_LIMIT = 10000
+DEFAULT_FILE_LIMIT = 10000
 
 
-def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, glob_limit=DEFAULT_GLOB_LIMIT):
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT):
     """
     Pushes to Github in name of a tool.
     What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
@@ -68,8 +68,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type data: dict of strings, optional
     :param prompt: a prompt shown just before the push. In case this prompt returns false, the push is aborted. This lambda function has access to an honesty prompt configured in .cs50,yml, and all files that will be included and excluded in the push.
     :type prompt: lambda str, list, list => bool, optional
-    :param glob_limit: maximum number of files to be matched by any globbing pattern.
-    :type glob_limit: int
+    :param file_limit: maximum number of files to be matched by any globbing pattern.
+    :type file_limit: int
     :return: GitHub username and the commit hash
     :type: tuple(str, str)
 
@@ -95,7 +95,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    remote, (honesty, included, excluded) = connect(slug, config_loader, glob_limit=DEFAULT_GLOB_LIMIT)
+    remote, (honesty, included, excluded) = connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT)
 
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
@@ -232,7 +232,7 @@ def files(patterns,
           include_tags=("include",),
           exclude_tags=("exclude",),
           root=".",
-          limit=DEFAULT_GLOB_LIMIT):
+          limit=DEFAULT_FILE_LIMIT):
     """
     Based on a list of patterns (``lib50.config.TaggedValue``) determine which files should be included and excluded.
     Any pattern tagged with a tag:
@@ -334,7 +334,7 @@ def files(patterns,
     return included, excluded
 
 
-def connect(slug, config_loader, glob_limit=DEFAULT_GLOB_LIMIT):
+def connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT):
     """
     Connects to a GitHub repo indentified by slug.
     Then parses the ``.cs50.yml`` config file with the ``config_loader``.
@@ -344,8 +344,8 @@ def connect(slug, config_loader, glob_limit=DEFAULT_GLOB_LIMIT):
     :type slug: str
     :param config_loader: a config loader that is able to parse the .cs50.yml config file for a tool.
     :type config_loader: lib50.config.Loader
-    :param glob_limit: The maximum number of files that are allowed to be included.
-    :type glob_limit: int
+    :param file_limit: The maximum number of files that are allowed to be included.
+    :type file_limit: int
     :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
     :type: tuple(dict, tuple(str, set, set))
     :raises lib50.InvalidSlugError: if the slug is invalid for the tool
@@ -387,7 +387,7 @@ def connect(slug, config_loader, glob_limit=DEFAULT_GLOB_LIMIT):
         honesty = config.get("honesty", True)
 
         # Figure out which files to include and exclude
-        included, excluded = files(config.get("files"), limit=glob_limit)
+        included, excluded = files(config.get("files"), limit=file_limit)
 
         # Check that at least 1 file is staged
         if not included:
@@ -1006,7 +1006,7 @@ def _run(command, quiet=False, timeout=None):
     return command_output
 
 
-def _glob(pattern, skip_dirs=False, limit=DEFAULT_GLOB_LIMIT):
+def _glob(pattern, skip_dirs=False, limit=DEFAULT_FILE_LIMIT):
     """
     Glob pattern, expand directories, return iterator over matching files.
     Throws ``lib50.TooManyFilesError`` if more than ``limit`` files are globbed.
