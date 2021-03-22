@@ -291,7 +291,7 @@ def files(patterns,
 
             # For each pattern
             for pattern in patterns:
-                if Path(pattern.value).expanduser().resolve().is_relative_to(Path.cwd()):
+                if not Path(pattern.value).expanduser().resolve().is_relative_to(Path.cwd()):
                     raise Error(_("Cannot include/exclude paths outside the current directory, but such a path ({}) was specified.")
                                 .format(pattern.value))
 
