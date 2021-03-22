@@ -291,7 +291,7 @@ def files(patterns,
 
             # For each pattern
             for pattern in patterns:
-                if not Path(pattern.value).expanduser().resolve().is_relative_to(Path.cwd()):
+                if not _is_relative_to(Path(pattern.value).expanduser().resolve(), Path.cwd()):
                     raise Error(_("Cannot include/exclude paths outside the current directory, but such a path ({}) was specified.")
                                 .format(pattern.value))
 
@@ -1258,6 +1258,15 @@ def _prompt_password(prompt="Password: "):
         return _prompt_password(prompt)
 
     return password_string
+
+
+def _is_relative_to(path, *others):
+    """The is_relative_to method for Paths is Python 3.9+ so we implement it here."""
+    try:
+        path.relative_to(*others)
+        return True
+    except ValueError:
+        return False
 
 
 @contextlib.contextmanager
