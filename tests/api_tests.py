@@ -83,7 +83,7 @@ class TestSlug(unittest.TestCase):
     def test_case(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
             lib50._api.Slug("cs50/lib50/TESTS/bar")
-        self.assertEquals(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
+        self.assertEqual(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
 
     def test_online(self):
         if os.environ.get("TRAVIS") == "true":
@@ -111,6 +111,7 @@ class TestSlug(unittest.TestCase):
 
             os.chdir(pathlib.Path(lib50.get_local_path()) / "foo" / "bar")
             subprocess.check_output(["git", "init"])
+            subprocess.check_output(["git", "checkout", "-b", "main"])
 
             os.chdir(path)
 
@@ -119,11 +120,11 @@ class TestSlug(unittest.TestCase):
             subprocess.check_output(["git", "add", ".cs50.yaml"])
             out = subprocess.check_output(["git", "commit", "-m", "\"qux\""])
 
-            slug = lib50._api.Slug("foo/bar/master/baz", offline=True)
-            self.assertEqual(slug.slug, "foo/bar/master/baz")
+            slug = lib50._api.Slug("foo/bar/main/baz", offline=True)
+            self.assertEqual(slug.slug, "foo/bar/main/baz")
             self.assertEqual(slug.org, "foo")
             self.assertEqual(slug.repo, "bar")
-            self.assertEqual(slug.branch, "master")
+            self.assertEqual(slug.branch, "main")
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
             lib50.set_local_path(old_local_path)
@@ -244,6 +245,7 @@ class TestGetLocalSlugs(unittest.TestCase):
         with open(path / ".cs50.yml", "w") as f:
             f.write("foo50: true\n")
         pexpect.run(f"git -C {path.parent.parent} init")
+        pexpect.run(f"git -C {path.parent.parent} checkout -b main")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
         self.debug_output = []
@@ -256,7 +258,7 @@ class TestGetLocalSlugs(unittest.TestCase):
     def test_one_local_slug(self):
         slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
-        self.assertEqual(slugs[0], "foo/bar/master/baz")
+        self.assertEqual(slugs[0], "foo/bar/main/baz")
 
 
 if __name__ == '__main__':

@@ -45,7 +45,10 @@ DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True):
+DEFAULT_FILE_LIMIT = 10000
+
+
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT):
     """
     Pushes to Github in name of a tool.
     What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
@@ -65,6 +68,8 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type data: dict of strings, optional
     :param prompt: a prompt shown just before the push. In case this prompt returns false, the push is aborted. This lambda function has access to an honesty prompt configured in .cs50,yml, and all files that will be included and excluded in the push.
     :type prompt: lambda str, list, list => bool, optional
+    :param file_limit: maximum number of files to be matched by any globbing pattern.
+    :type file_limit: int
     :return: GitHub username and the commit hash
     :type: tuple(str, str)
 
@@ -90,7 +95,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    remote, (honesty, included, excluded) = connect(slug, config_loader)
+    remote, (honesty, included, excluded) = connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT)
 
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
@@ -226,7 +231,8 @@ def files(patterns,
           require_tags=("require",),
           include_tags=("include",),
           exclude_tags=("exclude",),
-          root="."):
+          root=".",
+          limit=DEFAULT_FILE_LIMIT):
     """
     Based on a list of patterns (``lib50.config.TaggedValue``) determine which files should be included and excluded.
     Any pattern tagged with a tag:
@@ -245,6 +251,8 @@ def files(patterns,
     :type exclude_tags: list of strings, optional
     :param root: the root directory from which to look for files. Defaults to the current directory.
     :type root: str or pathlib.Path, optional
+    :param limit: Maximum number of files that can be globbed.
+    :type limit: int
     :return: all included files and all excluded files
     :type: tuple(set of strings, set of strings)
 
@@ -275,7 +283,7 @@ def files(patterns,
 
     with cd(root):
         # Include everything but hidden paths by default
-        included = _glob("*")
+        included = _glob("*", limit=limit)
         excluded = set()
 
         if patterns:
@@ -283,6 +291,10 @@ def files(patterns,
 
             # For each pattern
             for pattern in patterns:
+                if not _is_relative_to(Path(pattern.value).expanduser().resolve(), Path.cwd()):
+                    raise Error(_("Cannot include/exclude paths outside the current directory, but such a path ({}) was specified.")
+                                .format(pattern.value))
+
                 # Include all files that are tagged with !require
                 if pattern.tag in require_tags:
                     file = str(Path(pattern.value))
@@ -297,12 +309,12 @@ def files(patterns,
                             included.add(file)
                 # Include all files that are tagged with !include
                 elif pattern.tag in include_tags:
-                    new_included = _glob(pattern.value)
+                    new_included = _glob(pattern.value, limit=limit)
                     excluded -= new_included
                     included.update(new_included)
                 # Exclude all files that are tagged with !exclude
                 elif pattern.tag in exclude_tags:
-                    new_excluded = _glob(pattern.value)
+                    new_excluded = _glob(pattern.value, limit=limit)
                     included -= new_excluded
                     excluded.update(new_excluded)
 
@@ -322,7 +334,7 @@ def files(patterns,
     return included, excluded
 
 
-def connect(slug, config_loader):
+def connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT):
     """
     Connects to a GitHub repo indentified by slug.
     Then parses the ``.cs50.yml`` config file with the ``config_loader``.
@@ -332,6 +344,8 @@ def connect(slug, config_loader):
     :type slug: str
     :param config_loader: a config loader that is able to parse the .cs50.yml config file for a tool.
     :type config_loader: lib50.config.Loader
+    :param file_limit: The maximum number of files that are allowed to be included.
+    :type file_limit: int
     :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
     :type: tuple(dict, tuple(str, set, set))
     :raises lib50.InvalidSlugError: if the slug is invalid for the tool
@@ -373,12 +387,11 @@ def connect(slug, config_loader):
         honesty = config.get("honesty", True)
 
         # Figure out which files to include and exclude
-        included, excluded = files(config.get("files"))
+        included, excluded = files(config.get("files"), limit=file_limit)
 
         # Check that at least 1 file is staged
         if not included:
             raise Error(_("No files in this directory are expected by {}.".format(slug)))
-
 
         return remote, (honesty, included, excluded)
 
@@ -466,7 +479,7 @@ def prepare(tool, branch, user, included):
                     msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
                 msg += _((" If you're using GitHub two-factor authentication, you'll need to create and use a personal access token "
-                    "with the \"repo\" scope instead of your password. See https://cs50.ly/github-2fa for more information!"))
+                          "with the \"repo\" scope instead of your password. See https://cs50.ly/github-2fa for more information!"))
 
                 raise Error(msg)
 
@@ -712,7 +725,7 @@ class User:
     org = attr.ib()
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
-                                         init=False)
+                    init=False)
 
 
 class Git:
@@ -784,6 +797,7 @@ class Slug:
         print(slug.problem)
 
     """
+
     def __init__(self, slug, offline=False, github_token=None):
         """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
         self.slug = self.normalize_case(slug)
@@ -869,7 +883,6 @@ class Slug:
         parts[0] = parts[0].lower()
         parts[1] = parts[1].lower()
         return "/".join(parts)
-
 
     def __str__(self):
         return self.slug
@@ -993,24 +1006,33 @@ def _run(command, quiet=False, timeout=None):
     return command_output
 
 
-def _glob(pattern, skip_dirs=False):
-    """Glob pattern, expand directories, return all files that matched."""
+def _glob(pattern, skip_dirs=False, limit=DEFAULT_FILE_LIMIT):
+    """
+    Glob pattern, expand directories, return iterator over matching files.
+    Throws ``lib50.TooManyFilesError`` if more than ``limit`` files are globbed.
+    """
     # Implicit recursive iff no / in pattern and starts with *
-    if "/" not in pattern and pattern.startswith("*"):
-        files = glob.glob(f"**/{pattern}", recursive=True)
-    else:
-        files = glob.glob(pattern, recursive=True)
+    files = glob.iglob(f"**/{pattern}" if "/" not in pattern and pattern.startswith("*")
+                       else pattern, recursive=True)
+
+    all_files = set()
+
+    def add_file(f):
+        fname = str(Path(f))
+        all_files.add(fname)
+        if len(all_files) > limit:
+            raise TooManyFilesError(limit)
 
     # Expand dirs
-    all_files = set()
     for file in files:
         if os.path.isdir(file) and not skip_dirs:
-            all_files.update(set(f for f in _glob(f"{file}/**/*", skip_dirs=True) if not os.path.isdir(f)))
+            for f in _glob(f"{file}/**/*", skip_dirs=True):
+                if not os.path.isdir(f):
+                    add_file(f)
         else:
-            all_files.add(file)
+            add_file(file)
 
-    # Normalize all files
-    return {str(Path(f)) for f in all_files}
+    return all_files
 
 
 def _match_files(universe, pattern):
@@ -1124,7 +1146,6 @@ def _authenticate_ssh(org, repo=None):
     except (pexpect.EOF, pexpect.TIMEOUT):
         return None
 
-
     child.close()
 
     if i == 0:
@@ -1158,7 +1179,6 @@ def _authenticate_https(org, repo=None):
                 username = password = None
                 child.close()
                 child.exitstatus = 0
-
 
         if password is None:
             username = _prompt_username(_("GitHub username: "))
@@ -1238,6 +1258,15 @@ def _prompt_password(prompt="Password: "):
         return _prompt_password(prompt)
 
     return password_string
+
+
+def _is_relative_to(path, *others):
+    """The is_relative_to method for Paths is Python 3.9+ so we implement it here."""
+    try:
+        path.relative_to(*others)
+        return True
+    except ValueError:
+        return False
 
 
 @contextlib.contextmanager
