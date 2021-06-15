@@ -19,10 +19,10 @@ deploy:
     api_key: $GH_TOKEN
     skip_cleanup: true
     on:
-      branch: master
+      branch: main
   - provider: pypi
     user: "$PYPI_USERNAME"
     password: "$PYPI_PASSWORD"
     skip_cleanup: true
     on:
-      branch: master
+      branch: main
