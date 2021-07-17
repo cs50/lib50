@@ -9,6 +9,7 @@ jobs:
         python-version: '3.6'
     - name: Run tests
       run: |
+        pip install babel
         pip install .
         python setup.py compile_catalog
         python -m tests
