@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import functools
 
 import attr
@@ -22,7 +23,7 @@ import termcolor
 
 from . import _, get_local_path
 from ._errors import *
-from .authenticate import authenticate, logout, _run_authenticated
+from .authentication import authenticate, logout, _run_authenticated
 from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
