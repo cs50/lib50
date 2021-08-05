@@ -1,17 +1,19 @@
+import attr
 import contextlib
 import enum
 import pexpect
 import sys
+import termcolor
 import termios
 import tty
 
 from pathlib import Path
 
-import attr
-
 from . import _
 from . import _api as api
+from ._errors import ConnectionError
 
+__all__ = ["User", "authenticate", "logout"]
 
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
@@ -22,7 +24,7 @@ class User:
     name = attr.ib()
     repo = attr.ib()
     org = attr.ib()
-    passphrase = attr.ib()
+    passphrase = attr.ib(default=str)
     email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
                                          takes_self=True),
                     init=False)
@@ -48,12 +50,17 @@ def authenticate(org, repo=None):
 
     """
     with api.ProgressBar(_("Authenticating")) as progress_bar:
+        # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
+        
+        # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
+        
+        # SSH aut failed, fallback to HTTPS
         if user is None:
-            # SSH auth failed, fallback to HTTPS
             with _authenticate_https(org, repo=repo) as user:
                 yield user
+        # yield SSH user
         else:
             yield user
 
@@ -65,19 +72,29 @@ def logout():
     :return: None
     :type: None
     """
-    api._run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
+    api.run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
 
 
-def _run_authenticated(user, command, quiet=False, timeout=None):
-    """Run a command, returns command output."""
+def run_authenticated(user, command, quiet=False, timeout=None):
+    """Run a command as a authenticated user. Returns command output."""
     try:
-        with api._spawn(command, quiet, timeout) as child:
-            try:
-                child.expect(["Enter passphrase for key"])
+        with api.spawn(command, quiet, timeout) as child:
+            match = child.expect([
+                "Enter passphrase for key",
+                "Password for",
+                pexpect.EOF
+            ])
+            
+            # In case  "Enter passphrase for key" appears, send user's passphrase
+            if match == 0:
                 child.sendline(user.passphrase)
-            except pexpect.EOF:
                 pass
+            # In case "Password for" appears, https authentication failed
+            elif match == 1:
+                raise ConnectionError
+            
             command_output = child.read().strip().replace("\r\n", "\n")
+    
     except pexpect.TIMEOUT:
         api.logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
@@ -122,8 +139,8 @@ def _authenticate_ssh(org, repo=None):
                 "Enter passphrase for key"
             ]))
         
-        # If passphrase is needed, prompt and enter
-        if state == State.PASSPHRASE_PROMPT:
+        # while passphrase is needed, prompt and enter
+        while state == State.PASSPHRASE_PROMPT:
             # Prompt passphrase
             passphrase = _prompt_password("Enter passphrase for SSH key: ")
             
@@ -132,7 +149,8 @@ def _authenticate_ssh(org, repo=None):
             
             state = State(child.expect([
                 "Permission denied",
-                "Hi (.+)! You've successfully authenticated"
+                "Hi (.+)! You've successfully authenticated",
+                "Enter passphrase for key"
             ]))
 
         # Succesfull authentication, done
@@ -159,7 +177,7 @@ def _authenticate_https(org, repo=None):
         git = api.Git().set(api.Git.cache)
 
         # Get credentials from cache if possible
-        with api._spawn(git("credential fill"), quiet=True) as child:
+        with api.spawn(git("credential fill"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline("")
@@ -174,10 +192,10 @@ def _authenticate_https(org, repo=None):
 
         if password is None:
             username = _prompt_username(_("GitHub username: "))
-            password = _prompt_password(_("GitHub password: "))
+            password = _prompt_password(_("GitHub Personal Access Token: "))
 
         # Credentials are correct, best cache them
-        with api._spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
+        with api.spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline(f"path={org}/{username}")
@@ -189,6 +207,11 @@ def _authenticate_https(org, repo=None):
                    repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
                    org=org)
     except BaseException:
+        msg = _("You might be using your GitHub password to log in," \
+                " but that's no longer possible. But you can still use" \
+                " check50 and submit50! See https://cs50.ly/github for instructions.")
+        api.logger.warning(termcolor.colored(msg, attrs=["bold"]))
+
         # Some error occured while this context manager is active, best forget credentials.
         logout()
         raise
