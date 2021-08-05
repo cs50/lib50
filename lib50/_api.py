@@ -1047,7 +1047,7 @@ def _lfs_add(files, git):
     if huges:
         raise Error(_("These files are too large to be submitted:\n{}\n"
                       "Remove these files from your directory "
-                      "and then re-run!").format("\n".join(huges), org))
+                      "and then re-run!").format("\n".join(huges)))
 
     # Add large files (>100MB) with git-lfs
     if larges:
