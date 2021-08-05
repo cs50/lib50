@@ -181,8 +181,11 @@ def _authenticate_https(org, repo=None):
             child.sendline("protocol=https")
             child.sendline("host=github.com")
             child.sendline("")
-            i = child.expect(["Username for '.+'", "Password for '.+'",
-                              "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
+            i = child.expect([
+                "Username for '.+'",
+                "Password for '.+'",
+                "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
+            ])
             if i == 2:
                 username, password = child.match.groups()
             else:
