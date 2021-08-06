@@ -153,6 +153,17 @@ def _authenticate_ssh(org, repo=None):
                 "Enter passphrase for key"
             ]))
 
+            # In case of a re-prompt, warn the user
+            if state == State.PASSPHRASE_PROMPT:
+                print("Looks like that passphrase is incorrect, please try again.")
+            
+            # In case of failed auth and no re-prompt, warn user and fall back on https
+            if state == State.FAIL:
+                print("Looks like that passphrase is incorrect, trying authentication through"\
+                    " username and Personal Access Token instead.")
+                api.logger.warning("See https://cs50.ly/github for instructions on"\
+                    " the different authentication methods if you haven't already!")
+
         # Succesfull authentication, done
         if state == State.SUCCESS:
             username = child.match.groups()[0]
