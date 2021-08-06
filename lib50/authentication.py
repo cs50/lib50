@@ -159,7 +159,7 @@ def _authenticate_ssh(org, repo=None):
             
             # In case of failed auth and no re-prompt, warn user and fall back on https
             if state == State.FAIL:
-                print("Looks like that passphrase is incorrect, trying authentication through"\
+                print("Looks like that passphrase is incorrect, trying authentication with"\
                     " username and Personal Access Token instead.")
                 api.logger.warning("See https://cs50.ly/github for instructions on"\
                     " the different authentication methods if you haven't already!")
