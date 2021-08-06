@@ -53,10 +53,16 @@ def authenticate(org, repo=None):
         # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
         
+        # Show a quick reminder to check https://cs50.ly/github
+        warning = "GitHub now requires that you use SSH or a personal access token"\
+                  " instead of a password to log in, but you can still use check50 and submit50!"\
+                  " See https://cs50.ly/github for instructions if you haven't already!"
+        api.logger.warning(termcolor.colored(warning, attrs=["bold"]))
+
         # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
         
-        # SSH aut failed, fallback to HTTPS
+        # SSH auth failed, fallback to HTTPS
         if user is None:
             with _authenticate_https(org, repo=repo) as user:
                 yield user
@@ -161,8 +167,10 @@ def _authenticate_ssh(org, repo=None):
             if state == State.FAIL:
                 print("Looks like that passphrase is incorrect, trying authentication with"\
                     " username and Personal Access Token instead.")
-                api.logger.warning("See https://cs50.ly/github for instructions on"\
-                    " the different authentication methods if you haven't already!")
+                
+                warning = "See https://cs50.ly/github for instructions on"\
+                          " the different authentication methods if you haven't already!"
+                api.logger.warning(termcolor.colored(warning, attrs=["bold"]))
 
         # Succesfull authentication, done
         if state == State.SUCCESS:
