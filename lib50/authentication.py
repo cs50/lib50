@@ -172,31 +172,32 @@ def _authenticate_ssh(org, repo=None):
 def _authenticate_https(org, repo=None):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
     _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
+    api.Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+    git = api.Git().set(api.Git.cache)
+
+    # Get credentials from cache if possible
+    with api.spawn(git("credential fill"), quiet=True) as child:
+        child.sendline("protocol=https")
+        child.sendline("host=github.com")
+        child.sendline("")
+        i = child.expect([
+            "Username for '.+'",
+            "Password for '.+'",
+            "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
+        ])
+        if i == 2:
+            username, password = child.match.groups()
+        else:
+            username = password = None
+            child.close()
+            child.exitstatus = 0
+
+    # If password is not in cache, prompt
+    if password is None:
+        username = _prompt_username(_("GitHub username: "))
+        password = _prompt_password(_("GitHub Personal Access Token: "))
+
     try:
-        api.Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = api.Git().set(api.Git.cache)
-
-        # Get credentials from cache if possible
-        with api.spawn(git("credential fill"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline("")
-            i = child.expect([
-                "Username for '.+'",
-                "Password for '.+'",
-                "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
-            ])
-            if i == 2:
-                username, password = child.match.groups()
-            else:
-                username = password = None
-                child.close()
-                child.exitstatus = 0
-
-        if password is None:
-            username = _prompt_username(_("GitHub username: "))
-            password = _prompt_password(_("GitHub Personal Access Token: "))
-
         # Credentials are correct, best cache them
         with api.spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
             child.sendline("protocol=https")
@@ -209,13 +210,17 @@ def _authenticate_https(org, repo=None):
         yield User(name=username,
                    repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
                    org=org)
-    except BaseException:
+    except Exception:
         msg = _("You might be using your GitHub password to log in," \
-                " but that's no longer possible. But you can still use" \
-                " check50 and submit50! See https://cs50.ly/github for instructions.")
+        " but that's no longer possible. But you can still use" \
+        " check50 and submit50! See https://cs50.ly/github for instructions.")
         api.logger.warning(termcolor.colored(msg, attrs=["bold"]))
 
         # Some error occured while this context manager is active, best forget credentials.
+        logout()
+        raise
+    except BaseException:
+        # Some special error (like SIGINT) occured while this context manager is active, best forget credentials.
         logout()
         raise
 
