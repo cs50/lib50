@@ -18,13 +18,11 @@ import lib50.authentication
 class TestGit(unittest.TestCase):
     def setUp(self):
         self.info_output = []
-        self.debug_output = []
 
         self.old_info = lib50._api.logger.info
         self.old_debug = logging.debug
 
         lib50._api.logger.info = lambda msg : self.info_output.append(msg)
-        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         lib50._api.logger.info = self.old_info
@@ -249,8 +247,6 @@ class TestGetLocalSlugs(unittest.TestCase):
         pexpect.run(f"git -C {path.parent.parent} checkout -b main")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
-        self.debug_output = []
-        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         self.temp_dir.cleanup()
