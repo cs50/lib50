@@ -110,6 +110,8 @@ class TestSlug(unittest.TestCase):
 
             os.chdir(pathlib.Path(lib50.get_local_path()) / "foo" / "bar")
             subprocess.check_output(["git", "init"])
+            subprocess.check_output(["git", "config", "user.name", '"foo"'])
+            subprocess.check_output(["git", "config", "user.email", '"bar@baz.com"'])
             subprocess.check_output(["git", "checkout", "-b", "main"])
 
             os.chdir(path)
@@ -244,6 +246,8 @@ class TestGetLocalSlugs(unittest.TestCase):
         with open(path / ".cs50.yml", "w") as f:
             f.write("foo50: true\n")
         pexpect.run(f"git -C {path.parent.parent} init")
+        pexpect.run(f'git -C {path.parent.parent} config user.name "foo"')
+        pexpect.run(f'git -C {path.parent.parent} config user.email "bar@baz.com"')
         pexpect.run(f"git -C {path.parent.parent} checkout -b main")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
