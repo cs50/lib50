@@ -57,7 +57,7 @@ def authenticate(org, repo=None):
         warning = "GitHub now requires that you use SSH or a personal access token"\
                   " instead of a password to log in, but you can still use check50 and submit50!"\
                   " See https://cs50.ly/github for instructions if you haven't already!"
-        api.logger.warning(termcolor.colored(warning, attrs=["bold"]))
+        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
 
         # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
@@ -170,7 +170,7 @@ def _authenticate_ssh(org, repo=None):
                 
                 warning = "See https://cs50.ly/github for instructions on"\
                           " the different authentication methods if you haven't already!"
-                api.logger.warning(termcolor.colored(warning, attrs=["bold"]))
+                print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
 
         # Succesfull authentication, done
         if state == State.SUCCESS:
@@ -213,8 +213,8 @@ def _authenticate_https(org, repo=None):
 
     # If password is not in cache, prompt
     if password is None:
-        username = _prompt_username(_("GitHub username: "))
-        password = _prompt_password(_("GitHub Personal Access Token: "))
+        username = _prompt_username(_("Enter username for GitHub: "))
+        password = _prompt_password(_("Enter personal access token for GitHub: "))
 
     try:
         # Credentials are correct, best cache them
@@ -233,7 +233,7 @@ def _authenticate_https(org, repo=None):
         msg = _("You might be using your GitHub password to log in," \
         " but that's no longer possible. But you can still use" \
         " check50 and submit50! See https://cs50.ly/github for instructions.")
-        api.logger.warning(termcolor.colored(msg, attrs=["bold"]))
+        print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
 
         # Some error occured while this context manager is active, best forget credentials.
         logout()
