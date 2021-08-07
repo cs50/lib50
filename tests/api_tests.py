@@ -13,6 +13,7 @@ import termcolor
 import pexpect
 
 import lib50._api
+import lib50.authentication
 
 class TestGit(unittest.TestCase):
     def setUp(self):
@@ -190,19 +191,19 @@ class TestPromptPassword(unittest.TestCase):
         def mock():
             yield
 
-        old = lib50._api._no_echo_stdin
+        old = lib50.authentication._no_echo_stdin
         try:
-            lib50._api._no_echo_stdin = mock
+            lib50.authentication._no_echo_stdin = mock
             yield mock
         finally:
-            lib50._api._no_echo_stdin = old
+            lib50._api.authentication = old
 
     def test_ascii(self):
         f = io.StringIO()
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes("foo\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "foo")
         self.assertEqual(f.getvalue().count("*"), 3)
@@ -212,7 +213,7 @@ class TestPromptPassword(unittest.TestCase):
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes("↔♣¾€\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "↔♣¾€")
         self.assertEqual(f.getvalue().count("*"), 4)
@@ -229,7 +230,7 @@ class TestPromptPassword(unittest.TestCase):
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes(f"↔{chr(127)}♣¾{chr(127)}€\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "♣€")
         self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
