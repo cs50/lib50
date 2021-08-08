@@ -13,17 +13,16 @@ import termcolor
 import pexpect
 
 import lib50._api
+import lib50.authentication
 
 class TestGit(unittest.TestCase):
     def setUp(self):
         self.info_output = []
-        self.debug_output = []
 
         self.old_info = lib50._api.logger.info
         self.old_debug = logging.debug
 
         lib50._api.logger.info = lambda msg : self.info_output.append(msg)
-        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         lib50._api.logger.info = self.old_info
@@ -83,7 +82,7 @@ class TestSlug(unittest.TestCase):
     def test_case(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
             lib50._api.Slug("cs50/lib50/TESTS/bar")
-        self.assertEquals(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
+        self.assertEqual(lib50._api.Slug("CS50/LiB50/tests/bar").slug, "cs50/lib50/tests/bar")
 
     def test_online(self):
         if os.environ.get("TRAVIS") == "true":
@@ -111,6 +110,9 @@ class TestSlug(unittest.TestCase):
 
             os.chdir(pathlib.Path(lib50.get_local_path()) / "foo" / "bar")
             subprocess.check_output(["git", "init"])
+            subprocess.check_output(["git", "config", "user.name", '"foo"'])
+            subprocess.check_output(["git", "config", "user.email", '"bar@baz.com"'])
+            subprocess.check_output(["git", "checkout", "-b", "main"])
 
             os.chdir(path)
 
@@ -119,11 +121,11 @@ class TestSlug(unittest.TestCase):
             subprocess.check_output(["git", "add", ".cs50.yaml"])
             out = subprocess.check_output(["git", "commit", "-m", "\"qux\""])
 
-            slug = lib50._api.Slug("foo/bar/master/baz", offline=True)
-            self.assertEqual(slug.slug, "foo/bar/master/baz")
+            slug = lib50._api.Slug("foo/bar/main/baz", offline=True)
+            self.assertEqual(slug.slug, "foo/bar/main/baz")
             self.assertEqual(slug.org, "foo")
             self.assertEqual(slug.repo, "bar")
-            self.assertEqual(slug.branch, "master")
+            self.assertEqual(slug.branch, "main")
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
             lib50.set_local_path(old_local_path)
@@ -189,19 +191,19 @@ class TestPromptPassword(unittest.TestCase):
         def mock():
             yield
 
-        old = lib50._api._no_echo_stdin
+        old = lib50.authentication._no_echo_stdin
         try:
-            lib50._api._no_echo_stdin = mock
+            lib50.authentication._no_echo_stdin = mock
             yield mock
         finally:
-            lib50._api._no_echo_stdin = old
+            lib50._api.authentication = old
 
     def test_ascii(self):
         f = io.StringIO()
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes("foo\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "foo")
         self.assertEqual(f.getvalue().count("*"), 3)
@@ -211,7 +213,7 @@ class TestPromptPassword(unittest.TestCase):
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes("↔♣¾€\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "↔♣¾€")
         self.assertEqual(f.getvalue().count("*"), 4)
@@ -228,7 +230,7 @@ class TestPromptPassword(unittest.TestCase):
         with self.mock_no_echo_stdin(), self.replace_stdin(), contextlib.redirect_stdout(f):
             sys.stdin.write(bytes(f"↔{chr(127)}♣¾{chr(127)}€\n".encode("utf8")))
             sys.stdin.seek(0)
-            password = lib50._api._prompt_password()
+            password = lib50.authentication._prompt_password()
 
         self.assertEqual(password, "♣€")
         self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
@@ -244,10 +246,11 @@ class TestGetLocalSlugs(unittest.TestCase):
         with open(path / ".cs50.yml", "w") as f:
             f.write("foo50: true\n")
         pexpect.run(f"git -C {path.parent.parent} init")
+        pexpect.run(f'git -C {path.parent.parent} config user.name "foo"')
+        pexpect.run(f'git -C {path.parent.parent} config user.email "bar@baz.com"')
+        pexpect.run(f"git -C {path.parent.parent} checkout -b main")
         pexpect.run(f"git -C {path.parent.parent} add .")
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
-        self.debug_output = []
-        lib50._api.logger.debug = lambda msg : self.debug_output.append(msg)
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -256,7 +259,7 @@ class TestGetLocalSlugs(unittest.TestCase):
     def test_one_local_slug(self):
         slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
-        self.assertEqual(slugs[0], "foo/bar/master/baz")
+        self.assertEqual(slugs[0], "foo/bar/main/baz")
 
 
 if __name__ == '__main__':

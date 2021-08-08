@@ -1,11 +1,6 @@
-import collections
 import contextlib
-import copy
-import datetime
 import fnmatch
-import gettext
 import glob
-import itertools
 import logging
 import os
 from pathlib import Path
@@ -17,20 +12,17 @@ import subprocess
 import sys
 import tempfile
 import threading
-import termios
 import time
-import tty
 import functools
 
-import attr
 import jellyfish
 import pexpect
 import requests
 import termcolor
-import yaml
 
 from . import _, get_local_path
 from ._errors import *
+from .authentication import authenticate, logout, run_authenticated
 from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
@@ -40,17 +32,48 @@ __all__ = ["push", "local", "working_area", "files", "connect",
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-_CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 DEFAULT_PUSH_ORG = "me50"
 AUTH_URL = "https://submit.cs50.io"
 
 
-def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included, excluded: True):
-    """
-    Push to github.com/org/repo=username/slug if tool exists.
-    Returns username, commit hash
-    """
+DEFAULT_FILE_LIMIT = 10000
 
+
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT):
+    """
+    Pushes to Github in name of a tool.
+    What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
+    By default, this function pushes to https://github.com/org=me50/repo=<username>/branch=<slug>.
+
+    ``lib50.push`` executes the workflow: ``lib50.connect``, ``lib50.authenticate``, ``lib50.prepare`` and ``lib50.upload``.
+
+    :param tool: name of the tool that initialized the push
+    :type tool: str
+    :param slug: the slug identifying a .cs50.yml config file in a GitHub repo. This slug is also the branch in the student's repo to which this will push.
+    :type slug: str
+    :param config_loader: a config loader for the tool that is able to parse the .cs50.yml config file for the tool.
+    :type config_loader: lib50.config.Loader
+    :param repo: an alternative repo to push to, otherwise the default is used: github.com/me50/<github_login>
+    :type repo: str, optional
+    :param data: key value pairs that end up in the commit message. This can be used to communicate data with a backend.
+    :type data: dict of strings, optional
+    :param prompt: a prompt shown just before the push. In case this prompt returns false, the push is aborted. This lambda function has access to an honesty prompt configured in .cs50,yml, and all files that will be included and excluded in the push.
+    :type prompt: lambda str, list, list => bool, optional
+    :param file_limit: maximum number of files to be matched by any globbing pattern.
+    :type file_limit: int
+    :return: GitHub username and the commit hash
+    :type: tuple(str, str)
+
+    Example usage::
+
+        from lib50 import push
+        import submit50
+
+        name, hash = push("submit50", "cs50/problems/2019/x/hello", submit50.CONFIG_LOADER)
+        print(name)
+        print(hash)
+
+    """
     if data is None:
         data = {}
 
@@ -63,13 +86,13 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
     check_dependencies()
 
     # Connect to GitHub and parse the config files
-    remote, (included, excluded) = connect(slug, config_loader)
+    remote, (honesty, included, excluded) = connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT)
 
     # Authenticate the user with GitHub, and prepare the submission
     with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
-        if prompt(included, excluded):
+        if prompt(honesty, included, excluded):
             username, commit_hash = upload(slug, user, tool, data)
             format_dict = {"username": username, "slug": slug, "commit_hash": commit_hash}
             message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
@@ -80,8 +103,27 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda included
 
 def local(slug, offline=False, remove_origin=False, github_token=None):
     """
-    Create/update local copy of github.com/org/repo/branch.
-    Returns path to local copy
+    Create/update local copy of the GitHub repo indentified by slug.
+    The local copy is shallow and single branch, it contains just the last commit on the branch identified by the slug.
+
+    :param slug: the slug identifying a GitHub repo.
+    :type slug: str
+    :param offline: a flag that indicates whether the user is offline. If so, then the local copy is only checked, but not updated.
+    :type offline: bool, optional
+    :param remove_origin: a flag, that when set to True, will remove origin as a remote of the git repo.
+    :type remove_origin: bool, optional
+    :param github_token: a GitHub authentication token used to verify the slug, only needed if the slug identifies a private repo.
+    :type github_token: str, optional
+    :return: path to local copy
+    :type: pathlib.Path
+
+    Example usage::
+
+        from lib50 import local
+
+        path = local("cs50/problems/2019/x/hello")
+        print(list(path.glob("**/*")))
+
     """
 
     # Parse slug
@@ -91,25 +133,24 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 
     git = Git().set("-C {path}", path=str(local_path))
     if not local_path.exists():
-        _run(Git()("init {path}", path=str(local_path)))
-        _run(git(f"remote add origin {slug.origin}"))
+        run(Git()("init {path}", path=str(local_path)))
+        run(git(f"remote add origin {slug.origin}"))
 
     if not offline:
         # Get latest version of checks
-        _run(git("fetch origin {branch}", branch=slug.branch))
-
+        run(git("fetch origin --depth 1 {branch}", branch=slug.branch))
 
     # Tolerate checkout failure (e.g., when origin doesn't exist)
     try:
-        _run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
+        run(git("checkout -f -B {branch} origin/{branch}", branch=slug.branch))
     except Error:
         pass
 
     # Ensure that local copy of the repo is identical to remote copy
-    _run(git("reset --hard HEAD"))
+    run(git("reset --hard HEAD"))
 
     if remove_origin:
-        _run(git(f"remote remove origin"))
+        run(git(f"remote remove origin"))
 
     problem_path = (local_path / slug.problem).absolute()
 
@@ -122,9 +163,22 @@ def local(slug, offline=False, remove_origin=False, github_token=None):
 @contextlib.contextmanager
 def working_area(files, name=""):
     """
-    Copy all files to a temporary directory (the working area)
-    Optionally names the working area name
-    Returns path to the working area
+    A contextmanager that copies all files to a temporary directory (the working area)
+
+    :param files: all files to copy to the temporary directory
+    :type files: list of string(s) or pathlib.Path(s)
+    :param name: name of the temporary directory
+    :type name: str, optional
+    :return: path to the working area
+    :type: pathlib.Path
+
+    Example usage::
+
+        from lib50 import working_area
+
+        with working_area(["foo.c", "bar.py"], name="baz") as area:
+            print(list(area.glob("**/*")))
+
     """
     with tempfile.TemporaryDirectory() as dir:
         dir = Path(Path(dir) / name)
@@ -139,7 +193,23 @@ def working_area(files, name=""):
 
 @contextlib.contextmanager
 def cd(dest):
-    """ Temporarily cd into a directory"""
+    """
+    A contextmanager for temporarily changing directory.
+
+    :param dest: the path to the directory
+    :type dest: str or pathlib.Path
+    :return: dest unchanged
+    :type: str or pathlib.Path
+
+    Example usage::
+
+        from lib50 import cd
+        import os
+
+        with cd("foo") as current_dir:
+            print(os.getcwd())
+
+    """
     origin = os.getcwd()
     try:
         os.chdir(dest)
@@ -152,14 +222,46 @@ def files(patterns,
           require_tags=("require",),
           include_tags=("include",),
           exclude_tags=("exclude",),
-          root="."):
+          root=".",
+          limit=DEFAULT_FILE_LIMIT):
     """
-    Takes a list of lib50._config.TaggedValue returns which files should be included and excluded from `root`.
-    Any pattern tagged with a tag
-        from include_tags will be included
-        from require_tags can only be a file, that will then be included. MissingFilesError is raised if missing
-        from exclude_tags will be excluded
-    Any pattern in always_exclude will always be excluded.
+    Based on a list of patterns (``lib50.config.TaggedValue``) determine which files should be included and excluded.
+    Any pattern tagged with a tag:
+
+    * from ``include_tags`` will be included
+    * from ``require_tags`` can only be a file, that will then be included. ``MissingFilesError`` is raised if missing.
+    * from ``exclude_tags`` will be excluded
+
+    :param patterns: patterns that are processed in order, to determine which files should be included and excluded.
+    :type patterns: list of lib50.config.TaggedValue
+    :param require_tags: tags that mark a file as required and through that included
+    :type require_tags: list of strings, optional
+    :param include_tags: tags that mark a pattern as included
+    :type include_tags:  list of strings, optional
+    :param exclude_tags: tags that mark a pattern as excluded
+    :type exclude_tags: list of strings, optional
+    :param root: the root directory from which to look for files. Defaults to the current directory.
+    :type root: str or pathlib.Path, optional
+    :param limit: Maximum number of files that can be globbed.
+    :type limit: int
+    :return: all included files and all excluded files
+    :type: tuple(set of strings, set of strings)
+
+    Example usage::
+
+        from lib50 import files
+        from lib50.config import TaggedValue
+
+        open("foo.py", "w").close()
+        open("bar.c", "w").close()
+        open("baz.h", "w").close()
+
+        patterns = [TaggedValue("*", "exclude"),
+                    TaggedValue("*.c", "include"),
+                    TaggedValue("baz.h", "require")]
+
+        print(files(patterns)) # prints ({'bar.c', 'baz.h'}, {'foo.py'})
+
     """
     require_tags = list(require_tags)
     include_tags = list(include_tags)
@@ -172,7 +274,7 @@ def files(patterns,
 
     with cd(root):
         # Include everything but hidden paths by default
-        included = _glob("*")
+        included = _glob("*", limit=limit)
         excluded = set()
 
         if patterns:
@@ -180,6 +282,10 @@ def files(patterns,
 
             # For each pattern
             for pattern in patterns:
+                if not _is_relative_to(Path(pattern.value).expanduser().resolve(), Path.cwd()):
+                    raise Error(_("Cannot include/exclude paths outside the current directory, but such a path ({}) was specified.")
+                                .format(pattern.value))
+
                 # Include all files that are tagged with !require
                 if pattern.tag in require_tags:
                     file = str(Path(pattern.value))
@@ -194,12 +300,12 @@ def files(patterns,
                             included.add(file)
                 # Include all files that are tagged with !include
                 elif pattern.tag in include_tags:
-                    new_included = _glob(pattern.value)
+                    new_included = _glob(pattern.value, limit=limit)
                     excluded -= new_included
                     included.update(new_included)
                 # Exclude all files that are tagged with !exclude
                 elif pattern.tag in exclude_tags:
-                    new_excluded = _glob(pattern.value)
+                    new_excluded = _glob(pattern.value, limit=limit)
                     included -= new_excluded
                     excluded.update(new_excluded)
 
@@ -219,11 +325,32 @@ def files(patterns,
     return included, excluded
 
 
-def connect(slug, config_loader):
+def connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT):
     """
-    Ensure .cs50.yaml and tool key exists, raises Error otherwise
-    Check that all required files as per .cs50.yaml are present
-    Returns org, and a tuple of included and excluded files
+    Connects to a GitHub repo indentified by slug.
+    Then parses the ``.cs50.yml`` config file with the ``config_loader``.
+    If not all required files are present, per the ``files`` tag in ``.cs50.yml``, an ``Error`` is raised.
+
+    :param slug: the slug identifying a GitHub repo.
+    :type slug: str
+    :param config_loader: a config loader that is able to parse the .cs50.yml config file for a tool.
+    :type config_loader: lib50.config.Loader
+    :param file_limit: The maximum number of files that are allowed to be included.
+    :type file_limit: int
+    :return: the remote configuration (org, message, callback, results), and the input for a prompt (honesty question, included files, excluded files)
+    :type: tuple(dict, tuple(str, set, set))
+    :raises lib50.InvalidSlugError: if the slug is invalid for the tool
+    :raises lib50.Error: if no files are staged. For instance the slug expects .c files, but there are only .py files present.
+
+    Example usage::
+
+        from lib50 import connect
+        import submit50
+
+        open("hello.c", "w").close()
+
+        remote, (honesty, included, excluded) = connect("cs50/problems/2019/x/hello", submit50.CONFIG_LOADER)
+
     """
     with ProgressBar(_("Connecting")):
         # Get the config from GitHub at slug
@@ -248,82 +375,92 @@ def connect(slug, config_loader):
         }
 
         remote.update(config.get("remote", {}))
+        honesty = config.get("honesty", True)
 
         # Figure out which files to include and exclude
-        included, excluded = files(config.get("files"))
+        included, excluded = files(config.get("files"), limit=file_limit)
 
         # Check that at least 1 file is staged
         if not included:
-            raise Error(_("No files in this directory are expected for submission."))
+            raise Error(_("No files in this directory are expected by {}.".format(slug)))
 
-        return remote, (included, excluded)
-
-
-@contextlib.contextmanager
-def authenticate(org, repo=None):
-    """
-    Authenticate with GitHub via SSH if possible
-    Otherwise authenticate via HTTPS
-    Returns an authenticated User
-    """
-    with ProgressBar(_("Authenticating")) as progress_bar:
-        user = _authenticate_ssh(org, repo=repo)
-        progress_bar.stop()
-        if user is None:
-            # SSH auth failed, fallback to HTTPS
-            with _authenticate_https(org, repo=repo) as user:
-                yield user
-        else:
-            yield user
+        return remote, (honesty, included, excluded)
 
 
 @contextlib.contextmanager
 def prepare(tool, branch, user, included):
     """
-    Prepare git for pushing
-    Check that there are no permission errors
-    Add necessities to git config
-    Stage files
-    Stage files via lfs if necessary
-    Check that atleast one file is staged
+    A contextmanager that prepares git for pushing:
+
+    * Check that there are no permission errors
+    * Add necessities to git config
+    * Stage files
+    * Stage files via lfs if necessary
+    * Check that atleast one file is staged
+
+    :param tool: name of the tool that started the push
+    :type tool: str
+    :param branch: git branch to switch to
+    :type branch: str
+    :param user: the user who has access to the repo, and will ultimately author a commit
+    :type user: lib50.User
+    :param included: a list of files that are to be staged in git
+    :type included: list of string(s) or pathlib.Path(s)
+    :return: None
+    :type: None
+
+    Example usage::
+
+        from lib50 import authenticate, prepare, upload
+
+        with authenticate("me50") as user:
+            tool = "submit50"
+            branch = "cs50/problems/2019/x/hello"
+            with prepare(tool, branch, user, ["hello.c"]):
+                upload(branch, user, tool, {})
+
     """
     with working_area(included) as area:
         with ProgressBar(_("Verifying")):
             Git.working_area = f"-C {shlex.quote(str(area))}"
             git = Git().set(Git.working_area)
+
             # Clone just .git folder
             try:
-                _run(git.set(Git.cache)("clone --bare {repo} .git", repo=user.repo))
+                clone_command = f"clone --bare --single-branch {user.repo} .git"
+                try:
+                    run_authenticated(user, git.set(Git.cache)(f"{clone_command} --branch {branch}"))
+                except Error:
+                    run_authenticated(user, git.set(Git.cache)(clone_command))
             except Error:
-                msg = _("Make sure your username and/or password are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
+                msg = _("Make sure your username and/or personal access token are valid and {} is enabled for your account. To enable {}, ").format(tool, tool)
                 if user.org != DEFAULT_PUSH_ORG:
                     msg += _("please contact your instructor.")
                 else:
                     msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
-                msg += _((" If you're using GitHub two-factor authentication, you'll need to create and use a personal access token "
-                    "with the \"repo\" scope instead of your password. See https://cs50.ly/github-2fa for more information!"))
+                msg += _((" For instructions on how to set up a personal access token, please visit https://cs50.ly/github"))
 
                 raise Error(msg)
 
         with ProgressBar(_("Preparing")) as progress_bar:
-            _run(git("config --bool core.bare false"))
-            _run(git("config --path core.worktree {area}", area=str(area)))
+            run(git("config --bool core.bare false"))
+            run(git("config --path core.worktree {area}", area=str(area)))
 
             try:
-                _run(git("checkout --force {branch} .gitattributes", branch=branch))
+                run(git("checkout --force {branch} .gitattributes", branch=branch))
             except Error:
                 pass
 
             # Set user name/email in repo config
-            _run(git("config user.email {email}", email=user.email))
-            _run(git("config user.name {name}", name=user.name))
+            run(git("config user.email {email}", email=user.email))
+            run(git("config user.name {name}", name=user.name))
 
             # Switch to branch without checkout
-            _run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
+            run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
             # Git add all included files
-            _run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -338,10 +475,30 @@ def prepare(tool, branch, user, included):
 
 def upload(branch, user, tool, data):
     """
-    Commit + push to branch
-    Returns username, commit hash
-    """
+    Commit + push to a branch
 
+    :param branch: git branch to commit and push to
+    :type branch: str
+    :param user: authenticated user who can push to the repo and branch
+    :type user: lib50.User
+    :param tool: name of the tool that started the push
+    :type tool: str
+    :param data: key value pairs that end up in the commit message. This can be used to communicate data with a backend.
+    :type data: dict of strings
+    :return: username and commit hash
+    :type: tuple(str, str)
+
+    Example usage::
+
+        from lib50 import authenticate, prepare, upload
+
+        with authenticate("me50") as user:
+            tool = "submit50"
+            branch = "cs50/problems/2019/x/hello"
+            with prepare(tool, branch, user, ["hello.c"]):
+                upload(branch, user, tool, {tool:True})
+
+    """
     with ProgressBar(_("Uploading")):
         commit_message = _("automated commit by {}").format(tool)
 
@@ -351,17 +508,29 @@ def upload(branch, user, tool, data):
 
         # Commit + push
         git = Git().set(Git.working_area)
-        _run(git("commit -m {msg} --allow-empty", msg=commit_message))
-        _run(git.set(Git.cache)("push origin {branch}", branch=branch))
-        commit_hash = _run(git("rev-parse HEAD"))
+        run(git("commit -m {msg} --allow-empty", msg=commit_message))
+        run_authenticated(user, git.set(Git.cache)("push origin {branch}", branch=branch))
+        commit_hash = run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
 
 def fetch_config(slug):
     """
     Fetch the config file at slug from GitHub.
-    Returns the unparsed json as a string.
-    Raises InvalidSlugError if there is no config file at slug.
+
+    :param slug: a slug identifying a location on GitHub to fetch the config from.
+    :type slug: str
+    :return: the config in the form of unparsed json
+    :type: str
+    :raises lib50.InvalidSlugError: if there is no config file at slug.
+
+    Example usage::
+
+        from lib50 import fetch_config
+
+        config = fetch_config("cs50/problems/2019/x/hello")
+        print(config)
+
     """
     # Parse slug
     slug = Slug(slug)
@@ -395,8 +564,23 @@ def fetch_config(slug):
 
 def get_local_slugs(tool, similar_to=""):
     """
-    Get all slugs for tool of lib50 has a local copy.
-    If similar_to is given, ranks local slugs by similarity to similar_to.
+    Get all slugs for tool of which lib50 has a local copy.
+    If similar_to is given, ranks and sorts local slugs by similarity to similar_to.
+
+    :param tool: tool for which to get the local slugs
+    :type tool: str
+    :param similar_to: ranks and sorts local slugs by similarity to this slug
+    :type similar_to: str, optional
+    :return: list of slugs
+    :type: list of strings
+
+    Example usage::
+
+        from lib50 import get_local_slugs
+
+        slugs = get_local_slugs("check50", similar_to="cs50/problems/2019/x/hllo")
+        print(slugs)
+
     """
     # Extract org and repo from slug to limit search
     similar_to = similar_to.strip("/")
@@ -433,7 +617,7 @@ def get_local_slugs(tool, similar_to=""):
         org, repo = path.parts[0:2]
         if (org, repo) not in branch_map:
             git = Git().set("-C {path}", path=str(local_path / path.parent))
-            branch = _run(git("rev-parse --abbrev-ref HEAD"))
+            branch = run(git("rev-parse --abbrev-ref HEAD"))
             branch_map[(org, repo)] = branch
 
     # Reconstruct slugs for each config file
@@ -482,21 +666,18 @@ def check_dependencies():
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
 
-def logout():
-    _run(f"git credential-cache --socket {_CREDENTIAL_SOCKET} exit")
-
-
-@attr.s(slots=True)
-class User:
-    name = attr.ib()
-    repo = attr.ib()
-    org = attr.ib()
-    email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
-                                         takes_self=True),
-                    init=False)
-
-
 class Git:
+    """
+    A stateful helper class for formatting git commands.
+
+    To avoid confusion, and because these are not directly relevant to users,
+    the class variables ``cache`` and ``working_area`` are excluded from logs.
+
+    Example usage::
+
+        command = Git().set("-C {folder}", folder="foo")("git clone {repo}", repo="foo")
+        print(command)
+    """
     cache = ""
     working_area = ""
 
@@ -527,6 +708,34 @@ class Git:
 
 
 class Slug:
+    """
+    A CS50 slug that uniquely identifies a location on GitHub.
+
+    A slug is formatted as follows: <org>/<repo>/<branch>/<problem>
+    Both the branch and the problem can have an arbitrary number of slashes.
+    ``lib50.Slug`` performs validation on the slug, by querrying GitHub,
+    pulling in all branches, and then by finding a branch and problem that matches the slug.
+
+    :ivar str org: the GitHub organization
+    :ivar str repo: the GitHub repo
+    :ivar str branch: the branch in the repo
+    :ivar str problem: path to the problem, the directory containing ``.cs50.yml``
+    :ivar str slug: string representation of the slug
+    :ivar bool offline: flag signalling whether the user is offline. If set to True, the slug is parsed locally.
+    :ivar str origin: GitHub url for org/repo including authentication.
+
+    Example usage::
+
+        from lib50._api import Slug
+
+        slug = Slug("cs50/problems/2019/x/hello")
+        print(slug.org)
+        print(slug.repo)
+        print(slug.branch)
+        print(slug.problem)
+
+    """
+
     def __init__(self, slug, offline=False, github_token=None):
         """Parse <org>/<repo>/<branch>/<problem_dir> from slug."""
         self.slug = self.normalize_case(slug)
@@ -554,6 +763,8 @@ class Slug:
             if not offline:
                 raise ConnectionError("Could not connect to GitHub, it seems you are offline.")
             branches = []
+        except ConnectionError:
+            raise
         except Error:
             branches = []
 
@@ -582,23 +793,28 @@ class Slug:
         """Get branches from org/repo."""
         if self.offline:
             local_path = get_local_path() / self.org / self.repo
-            output = _run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
+            output = run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
         else:
             cmd = f"git ls-remote --heads {self.origin}"
             try:
-                with _spawn(cmd, timeout=3) as child:
+                with spawn(cmd, timeout=3) as child:
                     output = child.read().strip().split("\r\n")
             except pexpect.TIMEOUT:
                 if "Username for" in child.buffer:
                     return []
                 else:
                     raise TimeoutError(3)
+            except Error:
+                if "Could not resolve host" in child.before + child.buffer:
+                    raise ConnectionError
+                raise
 
         # Parse get_refs output for the actual branch names
         return (line.split()[1].replace("refs/heads/", "") for line in output)
 
     @staticmethod
     def normalize_case(slug):
+        """Normalize the case of a slug in string form"""
         parts = slug.split("/")
         if len(parts) < 3:
             raise InvalidSlugError(_("Invalid slug"))
@@ -606,17 +822,35 @@ class Slug:
         parts[1] = parts[1].lower()
         return "/".join(parts)
 
-
     def __str__(self):
         return self.slug
 
 
 class ProgressBar:
-    """Show a progress bar starting with message."""
+    """
+    A contextmanager that shows a progress bar starting with message.
+
+    Example usage::
+
+        from lib50 import ProgressBar
+        import time
+
+        with ProgressBar("uploading") as bar:
+            time.sleep(5)
+            bar.stop()
+            time.sleep(5)
+
+    """
     DISABLED = False
     TICKS_PER_SECOND = 2
 
     def __init__(self, message, output_stream=None):
+        """
+        :param message: the message of the progress bar, what the user is waiting on
+        :type message: str
+        :param output_stream: a stream to write the progress bar to
+        :type output_stream: a stream or file-like object
+        """
 
         if output_stream is None:
             output_stream = sys.stderr
@@ -669,7 +903,8 @@ class _StreamToLogger:
 
 
 @contextlib.contextmanager
-def _spawn(command, quiet=False, timeout=None):
+def spawn(command, quiet=False, timeout=None):
+    """Run (spawn) a command with `pexpect.spawn`"""
     # Spawn command
     child = pexpect.spawn(
         command,
@@ -697,10 +932,10 @@ def _spawn(command, quiet=False, timeout=None):
             raise Error()
 
 
-def _run(command, quiet=False, timeout=None):
+def run(command, quiet=False, timeout=None):
     """Run a command, returns command output."""
     try:
-        with _spawn(command, quiet, timeout) as child:
+        with spawn(command, quiet, timeout) as child:
             command_output = child.read().strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
@@ -709,27 +944,37 @@ def _run(command, quiet=False, timeout=None):
     return command_output
 
 
-def _glob(pattern, skip_dirs=False):
-    """Glob pattern, expand directories, return all files that matched."""
+def _glob(pattern, skip_dirs=False, limit=DEFAULT_FILE_LIMIT):
+    """
+    Glob pattern, expand directories, return iterator over matching files.
+    Throws ``lib50.TooManyFilesError`` if more than ``limit`` files are globbed.
+    """
     # Implicit recursive iff no / in pattern and starts with *
-    if "/" not in pattern and pattern.startswith("*"):
-        files = glob.glob(f"**/{pattern}", recursive=True)
-    else:
-        files = glob.glob(pattern, recursive=True)
+    files = glob.iglob(f"**/{pattern}" if "/" not in pattern and pattern.startswith("*")
+                       else pattern, recursive=True)
+
+    all_files = set()
+
+    def add_file(f):
+        fname = str(Path(f))
+        all_files.add(fname)
+        if len(all_files) > limit:
+            raise TooManyFilesError(limit)
 
     # Expand dirs
-    all_files = set()
     for file in files:
         if os.path.isdir(file) and not skip_dirs:
-            all_files.update(set(f for f in _glob(f"{file}/**/*", skip_dirs=True) if not os.path.isdir(f)))
+            for f in _glob(f"{file}/**/*", skip_dirs=True):
+                if not os.path.isdir(f):
+                    add_file(f)
         else:
-            all_files.add(file)
+            add_file(file)
 
-    # Normalize all files
-    return {str(Path(f)) for f in all_files}
+    return all_files
 
 
 def _match_files(universe, pattern):
+    """From a universe of files, get just those files that match the pattern."""
     # Implicit recursive iff no / in pattern and starts with *
     if "/" not in pattern and pattern.startswith("*"):
         pattern = f"**/{pattern}"
@@ -755,10 +1000,13 @@ def get_content(org, repo, branch, filepath):
 
 def check_github_status():
     """
-    Pings the githubstatus API. Raises an Error if the Git Operations and/or
+    Pings the githubstatus API. Raises a ConnectionError if the Git Operations and/or
     API requests components show an increase in errors.
-    """
 
+    :return: None
+    :type: None
+    :raises lib50.ConnectionError: if the Git Operations and/or API requests components show an increase in errors.
+    """
     # https://www.githubstatus.com/api
     status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json")
 
@@ -799,7 +1047,7 @@ def _lfs_add(files, git):
     if huges:
         raise Error(_("These files are too large to be submitted:\n{}\n"
                       "Remove these files from your directory "
-                      "and then re-run!").format("\n".join(huges), org))
+                      "and then re-run!").format("\n".join(huges)))
 
     # Add large files (>100MB) with git-lfs
     if larges:
@@ -810,158 +1058,24 @@ def _lfs_add(files, git):
                           "and then re-run!").format("\n".join(larges)))
 
         # Install git-lfs for this repo
-        _run(git("lfs install --local"))
+        run(git("lfs install --local"))
 
         # For pre-push hook
-        _run(git("config credential.helper cache"))
+        run(git("config credential.helper cache"))
 
         # Rm previously added file, have lfs track file, add file again
         for large in larges:
-            _run(git("rm --cached {large}", large=large))
-            _run(git("lfs track {large}", large=large))
-            _run(git("add {large}", large=large))
-        _run(git("add --force .gitattributes"))
+            run(git("rm --cached {large}", large=large))
+            run(git("lfs track {large}", large=large))
+            run(git("add {large}", large=large))
+        run(git("add --force .gitattributes"))
 
 
-def _authenticate_ssh(org, repo=None):
-    """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
-    # Require ssh-agent
-    child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
-    # GitHub prints 'Hi {username}!...' when attempting to get shell access
+def _is_relative_to(path, *others):
+    """The is_relative_to method for Paths is Python 3.9+ so we implement it here."""
     try:
-        i = child.expect(["Hi (.+)! You've successfully authenticated",
-                          "Enter passphrase for key",
-                          "Permission denied",
-                          "Are you sure you want to continue connecting"])
-    except pexpect.TIMEOUT:
-        return None
+        path.relative_to(*others)
+        return True
+    except ValueError:
+        return False
 
-
-    child.close()
-
-    if i == 0:
-        username = child.match.groups()[0]
-    else:
-        return None
-
-    return User(name=username,
-                repo=f"ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
-                org=org)
-
-
-@contextlib.contextmanager
-def _authenticate_https(org, repo=None):
-    """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
-    _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
-    try:
-        Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
-        git = Git().set(Git.cache)
-
-        # Get credentials from cache if possible
-        with _spawn(git("credential fill"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline("")
-            i = child.expect(["Username for '.+'", "Password for '.+'",
-                              "username=([^\r]+)\r\npassword=([^\r]+)\r\n"])
-            if i == 2:
-                username, password = child.match.groups()
-            else:
-                username = password = None
-                child.close()
-                child.exitstatus = 0
-
-
-        if password is None:
-            username = _prompt_username(_("GitHub username: "))
-            password = _prompt_password(_("GitHub password: "))
-
-        # Credentials are correct, best cache them
-        with _spawn(git("-c credentialcache.ignoresighup=true credential approve"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline(f"path={org}/{username}")
-            child.sendline(f"username={username}")
-            child.sendline(f"password={password}")
-            child.sendline("")
-
-        yield User(name=username,
-                   repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
-                   org=org)
-    except BaseException:
-        # Some error occured while this context manager is active, best forget credentials.
-        logout()
-        raise
-
-
-def _prompt_username(prompt="Username: "):
-    """Prompt the user for username."""
-    try:
-        while True:
-            username = input(prompt).strip()
-            if not username:
-                print("Username cannot be empty, please try again.")
-            elif "@" in username:
-                print("Please enter your GitHub username, not email.")
-            else:
-                return username
-    except EOFError:
-        print()
-
-
-def _prompt_password(prompt="Password: "):
-    """Prompt the user for password, printing asterisks for each character"""
-    print(prompt, end="", flush=True)
-    password_bytes = []
-    password_string = ""
-
-    with _no_echo_stdin():
-        while True:
-            # Read one byte
-            ch = sys.stdin.buffer.read(1)[0]
-            # If user presses Enter or ctrl-d
-            if ch in (ord("\r"), ord("\n"), 4):
-                print("\r")
-                break
-            # Del
-            elif ch == 127:
-                if len(password_string) > 0:
-                    print("\b \b", end="", flush=True)
-                # Remove last char and its corresponding bytes
-                password_string = password_string[:-1]
-                password_bytes = list(password_string.encode("utf8"))
-            # Ctrl-c
-            elif ch == 3:
-                print("^C", end="", flush=True)
-                raise KeyboardInterrupt
-            else:
-                password_bytes.append(ch)
-
-                # If byte added concludes a utf8 char, print *
-                try:
-                    password_string = bytes(password_bytes).decode("utf8")
-                except UnicodeDecodeError:
-                    pass
-                else:
-                    print("*", end="", flush=True)
-
-    if not password_string:
-        print("Password cannot be empty, please try again.")
-        return _prompt_password(prompt)
-
-    return password_string
-
-
-@contextlib.contextmanager
-def _no_echo_stdin():
-    """
-    On Unix only, have stdin not echo input.
-    https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
-    """
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-    try:
-        yield
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
