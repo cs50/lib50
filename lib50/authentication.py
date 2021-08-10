@@ -52,10 +52,10 @@ def authenticate(org, repo=None):
     with api.ProgressBar(_("Authenticating")) as progress_bar:
         # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
-        
+
         # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
-        
+
         # SSH auth failed, fallback to HTTPS
         if user is None:
             with _authenticate_https(org, repo=repo) as user:
@@ -84,7 +84,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
                 "Password for",
                 pexpect.EOF
             ])
-            
+
             # In case  "Enter passphrase for key" appears, send user's passphrase
             if match == 0:
                 child.sendline(user.passphrase)
@@ -92,9 +92,9 @@ def run_authenticated(user, command, quiet=False, timeout=None):
             # In case "Password for" appears, https authentication failed
             elif match == 1:
                 raise ConnectionError
-            
+
             command_output = child.read().strip().replace("\r\n", "\n")
-    
+
     except pexpect.TIMEOUT:
         api.logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
@@ -104,7 +104,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
 
 def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
-    
+
     class State(enum.Enum):
         FAIL = 0
         SUCCESS = 1
@@ -113,7 +113,7 @@ def _authenticate_ssh(org, repo=None):
 
     # Require ssh-agent
     child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
-    
+
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         state = State(child.expect([
@@ -126,7 +126,7 @@ def _authenticate_ssh(org, repo=None):
         return None
 
     passphrase = ""
-    
+
     try:
         # New SSH connection
         if state == State.NEW_KEY:
@@ -150,10 +150,10 @@ def _authenticate_ssh(org, repo=None):
         while state == State.PASSPHRASE_PROMPT:
             # Prompt passphrase
             passphrase = _prompt_password("Enter passphrase for SSH key: ")
-            
+
             # Enter passphrase
             child.sendline(passphrase)
-            
+
             state = State(child.expect([
                 "Permission denied",
                 "Hi (.+)! You've successfully authenticated",
@@ -163,15 +163,11 @@ def _authenticate_ssh(org, repo=None):
             # In case of a re-prompt, warn the user
             if state == State.PASSPHRASE_PROMPT:
                 print("Looks like that passphrase is incorrect, please try again.")
-            
+
             # In case of failed auth and no re-prompt, warn user and fall back on https
             if state == State.FAIL:
                 print("Looks like that passphrase is incorrect, trying authentication with"\
                     " username and Personal Access Token instead.")
-                
-                warning = "See https://cs50.ly/github for instructions on"\
-                          " the different authentication methods if you haven't already!"
-                print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
 
         # Succesfull authentication, done
         if state == State.SUCCESS:
