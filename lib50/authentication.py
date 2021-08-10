@@ -52,12 +52,19 @@ def authenticate(org, repo=None):
     with api.ProgressBar(_("Authenticating")) as progress_bar:
         # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
-        
+
         # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
-        
+
         # SSH auth failed, fallback to HTTPS
         if user is None:
+
+            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
+            warning = "GitHub now requires that you use SSH or a personal access token"\
+                  " instead of a password to log in, but you can still use check50 and submit50!"\
+                  " See https://cs50.ly/github for instructions if you haven't already!"
+            print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
+
             with _authenticate_https(org, repo=repo) as user:
                 yield user
         # yield SSH user
@@ -84,7 +91,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
                 "Password for",
                 pexpect.EOF
             ])
-            
+
             # In case  "Enter passphrase for key" appears, send user's passphrase
             if match == 0:
                 child.sendline(user.passphrase)
@@ -92,9 +99,9 @@ def run_authenticated(user, command, quiet=False, timeout=None):
             # In case "Password for" appears, https authentication failed
             elif match == 1:
                 raise ConnectionError
-            
+
             command_output = child.read().strip().replace("\r\n", "\n")
-    
+
     except pexpect.TIMEOUT:
         api.logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
@@ -104,7 +111,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
 
 def _authenticate_ssh(org, repo=None):
     """Try authenticating via ssh, if succesful yields a User, otherwise raises Error."""
-    
+
     class State(enum.Enum):
         FAIL = 0
         SUCCESS = 1
@@ -113,7 +120,7 @@ def _authenticate_ssh(org, repo=None):
 
     # Require ssh-agent
     child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
-    
+
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
         state = State(child.expect([
@@ -125,15 +132,8 @@ def _authenticate_ssh(org, repo=None):
     except (pexpect.EOF, pexpect.TIMEOUT):
         return None
 
-    # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
-    if state != State.SUCCESS:
-        warning = "GitHub now requires that you use SSH or a personal access token"\
-                  " instead of a password to log in, but you can still use check50 and submit50!"\
-                  " See https://cs50.ly/github for instructions if you haven't already!"
-        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
-
     passphrase = ""
-    
+
     try:
         # New SSH connection
         if state == State.NEW_KEY:
@@ -145,15 +145,15 @@ def _authenticate_ssh(org, repo=None):
                 "Hi (.+)! You've successfully authenticated",
                 "Enter passphrase for key"
             ]))
-        
+
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
             # Prompt passphrase
             passphrase = _prompt_password("Enter passphrase for SSH key: ")
-            
+
             # Enter passphrase
             child.sendline(passphrase)
-            
+
             state = State(child.expect([
                 "Permission denied",
                 "Hi (.+)! You've successfully authenticated",
@@ -163,15 +163,11 @@ def _authenticate_ssh(org, repo=None):
             # In case of a re-prompt, warn the user
             if state == State.PASSPHRASE_PROMPT:
                 print("Looks like that passphrase is incorrect, please try again.")
-            
+
             # In case of failed auth and no re-prompt, warn user and fall back on https
             if state == State.FAIL:
                 print("Looks like that passphrase is incorrect, trying authentication with"\
                     " username and Personal Access Token instead.")
-                
-                warning = "See https://cs50.ly/github for instructions on"\
-                          " the different authentication methods if you haven't already!"
-                print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
 
         # Succesfull authentication, done
         if state == State.SUCCESS:
