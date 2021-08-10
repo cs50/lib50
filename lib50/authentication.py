@@ -125,13 +125,6 @@ def _authenticate_ssh(org, repo=None):
     except (pexpect.EOF, pexpect.TIMEOUT):
         return None
 
-    # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
-    if state != State.SUCCESS:
-        warning = "GitHub now requires that you use SSH or a personal access token"\
-                  " instead of a password to log in, but you can still use check50 and submit50!"\
-                  " See https://cs50.ly/github for instructions if you haven't already!"
-        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
-
     passphrase = ""
     
     try:
@@ -145,7 +138,14 @@ def _authenticate_ssh(org, repo=None):
                 "Hi (.+)! You've successfully authenticated",
                 "Enter passphrase for key"
             ]))
-        
+
+        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
+        if state != State.SUCCESS:
+            warning = "GitHub now requires that you use SSH or a personal access token"\
+                      " instead of a password to log in, but you can still use check50 and submit50!"\
+                      " See https://cs50.ly/github for instructions if you haven't already!"
+            print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
+            
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
             # Prompt passphrase
