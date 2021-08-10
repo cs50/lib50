@@ -53,12 +53,6 @@ def authenticate(org, repo=None):
         # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
         
-        # Show a quick reminder to check https://cs50.ly/github
-        warning = "GitHub now requires that you use SSH or a personal access token"\
-                  " instead of a password to log in, but you can still use check50 and submit50!"\
-                  " See https://cs50.ly/github for instructions if you haven't already!"
-        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
-
         # Try auth through SSH
         user = _authenticate_ssh(org, repo=repo)
         
@@ -131,8 +125,15 @@ def _authenticate_ssh(org, repo=None):
     except (pexpect.EOF, pexpect.TIMEOUT):
         return None
 
-    passphrase = ""
+    # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
+    if state != State.SUCCESS:
+        warning = "GitHub now requires that you use SSH or a personal access token"\
+                  " instead of a password to log in, but you can still use check50 and submit50!"\
+                  " See https://cs50.ly/github for instructions if you haven't already!"
+        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
 
+    passphrase = ""
+    
     try:
         # New SSH connection
         if state == State.NEW_KEY:
