@@ -141,10 +141,7 @@ def _authenticate_ssh(org, repo=None):
 
         # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
         if state != State.SUCCESS:
-            warning = "GitHub now requires that you use SSH or a personal access token"\
-                      " instead of a password to log in, but you can still use check50 and submit50!"\
-                      " See https://cs50.ly/github for instructions if you haven't already!"
-            print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
+            _show_gh_changes_warning()
             
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
@@ -210,6 +207,7 @@ def _authenticate_https(org, repo=None):
 
     # If password is not in cache, prompt
     if password is None:
+        _show_gh_changes_warning()
         username = _prompt_username(_("Enter username for GitHub: "))
         password = _prompt_password(_("Enter personal access token for GitHub: "))
 
@@ -239,6 +237,16 @@ def _authenticate_https(org, repo=None):
         # Some special error (like SIGINT) occured while this context manager is active, best forget credentials.
         logout()
         raise
+
+
+def _show_gh_changes_warning():
+    """Only once show a warning on the no password change at GitHub."""
+    if not hasattr(_show_gh_changes_warning, "showed"):
+        warning = "GitHub now requires that you use SSH or a personal access token"\
+                        " instead of a password to log in, but you can still use check50 and submit50!"\
+                        " See https://cs50.ly/github for instructions if you haven't already!"
+        print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
+    _show_gh_changes_warning.showed = True
 
 
 def _prompt_username(prompt="Username: "):
