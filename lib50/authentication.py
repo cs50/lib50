@@ -139,12 +139,12 @@ def _authenticate_ssh(org, repo=None):
                 "Enter passphrase for key"
             ]))
 
-        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated     
-        if state != State.SUCCESS:
-            _show_gh_changes_warning()
-            
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
+
+            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated    
+            _show_gh_changes_warning()
+
             # Prompt passphrase
             passphrase = _prompt_password("Enter passphrase for SSH key: ")
 
@@ -207,7 +207,10 @@ def _authenticate_https(org, repo=None):
 
     # If password is not in cache, prompt
     if password is None:
+
+        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated    
         _show_gh_changes_warning()
+
         username = _prompt_username(_("Enter username for GitHub: "))
         password = _prompt_password(_("Enter personal access token for GitHub: "))
 
