@@ -142,7 +142,7 @@ def _authenticate_ssh(org, repo=None):
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
 
-            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated    
+            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
             _show_gh_changes_warning()
 
             # Prompt passphrase
@@ -208,7 +208,7 @@ def _authenticate_https(org, repo=None):
     # If password is not in cache, prompt
     if password is None:
 
-        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated    
+        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
         _show_gh_changes_warning()
 
         username = _prompt_username(_("Enter username for GitHub: "))
@@ -227,11 +227,14 @@ def _authenticate_https(org, repo=None):
         yield User(name=username,
                    repo=f"https://{username}@github.com/{org}/{username if repo is None else repo}",
                    org=org)
-    except Exception:
-        msg = _("You might be using your GitHub password to log in," \
-        " but that's no longer possible. But you can still use" \
-        " check50 and submit50! See https://cs50.ly/github for instructions.")
-        print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
+    except Exception as e:
+
+        # Do not prompt message if user rejects the honesty prompt
+        if str(e) != "No files were submitted.":
+            msg = _("You might be using your GitHub password to log in," \
+            " but that's no longer possible. But you can still use" \
+            " check50 and submit50! See https://cs50.ly/github for instructions.")
+            print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
 
         # Some error occured while this context manager is active, best forget credentials.
         logout()
