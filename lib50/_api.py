@@ -98,7 +98,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
             message = remote["message"].format(results=remote["results"].format(**format_dict), **format_dict)
             return username, commit_hash, message
         else:
-            raise Error(_("No files were submitted."))
+            raise RejectedHonestyPromptError(_("No files were submitted."))
 
 
 def local(slug, offline=False, remove_origin=False, github_token=None):

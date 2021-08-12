@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import _
 from . import _api as api
-from ._errors import ConnectionError
+from ._errors import ConnectionError, RejectedHonestyPromptError
 
 __all__ = ["User", "authenticate", "logout"]
 
@@ -230,7 +230,7 @@ def _authenticate_https(org, repo=None):
     except Exception as e:
 
         # Do not prompt message if user rejects the honesty prompt
-        if str(e) != "No files were submitted.":
+        if not isinstance(e, RejectedHonestyPromptError):
             msg = _("You might be using your GitHub password to log in," \
             " but that's no longer possible. But you can still use" \
             " check50 and submit50! See https://cs50.ly/github for instructions.")

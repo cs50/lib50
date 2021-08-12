@@ -1,8 +1,17 @@
 import os
 from . import _
 
-__all__ = ["Error", "InvalidSlugError", "MissingFilesError", "TooManyFilesError",
-           "InvalidConfigError", "MissingToolError", "TimeoutError", "ConnectionError"]
+__all__ = [
+    "Error",
+    "InvalidSlugError",
+    "MissingFilesError",
+    "TooManyFilesError",
+    "InvalidConfigError",
+    "MissingToolError",
+    "TimeoutError",
+    "ConnectionError",
+    "RejectedHonestyPromptError"
+]
 
 
 class Error(Exception):
@@ -90,4 +99,9 @@ class ConnectionError(Error):
 
 class InvalidSignatureError(Error):
     """A ``lib50.Error`` signalling the signature of a payload is invalid."""
+    pass
+
+
+class RejectedHonestyPromptError(Error):
+    """A ``lib50.Error`` signalling the honesty prompt was rejected by the user."""
     pass
