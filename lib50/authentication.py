@@ -1,6 +1,7 @@
 import attr
 import contextlib
 import enum
+import os
 import pexpect
 import sys
 import termcolor
@@ -205,14 +206,26 @@ def _authenticate_https(org, repo=None):
             child.close()
             child.exitstatus = 0
 
-    # If password is not in cache, prompt
+    # If password is not in cache
     if password is None:
 
-        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
-        _show_gh_changes_warning()
+        # Get PAT from CS50PAT environment variable if it exists
+        username = os.environ.get("CS50_GH_USER")
+        password = os.environ.get("CS50_GH_PAT")
 
-        username = _prompt_username(_("Enter username for GitHub: "))
-        password = _prompt_password(_("Enter personal access token for GitHub: "))
+        # Prompt for username
+        if username is None:
+            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
+            _show_gh_changes_warning()
+            
+            username = _prompt_username(_("Enter username for GitHub: "))
+        
+        # Prompt for PAT
+        if password is None:
+            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
+            _show_gh_changes_warning()
+
+            password = _prompt_password(_("Enter personal access token for GitHub: "))
 
     try:
         # Credentials are correct, best cache them
