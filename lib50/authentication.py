@@ -195,32 +195,35 @@ def _authenticate_https(org, repo=None):
 
     # Otherwise, get credentials from cache if possible
     if username is None or password is None:
-        with api.spawn(git("credential fill"), quiet=True) as child:
-            child.sendline("protocol=https")
-            child.sendline("host=github.com")
-            child.sendline("")
-            i = child.expect([
-                "Username for '.+'",
-                "Password for '.+'",
-                "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
-            ])
-            if i == 2:
-                cached_username, cached_password = child.match.groups()
+        try:
+            with api.spawn(git("credential fill"), quiet=True) as child:
+                child.sendline("protocol=https")
+                child.sendline("host=github.com")
+                child.sendline("")
+                i = child.expect([
+                    "Username for '.+'",
+                    "Password for '.+'",
+                    "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
+                ])
+                if i == 2:
+                    cached_username, cached_password = child.match.groups()
 
-                # if cached credentials differ from existing env variables, don't use cache
-                same_username = username is None or username == cached_username
-                same_password = password is None or password == cached_password
-                if same_username and same_password:
-                    username, password = cached_username, cached_password
-            else:
-                child.close()
-                child.exitstatus = 0
+                    # if cached credentials differ from existing env variables, don't use cache
+                    same_username = username is None or username == cached_username
+                    same_password = password is None or password == cached_password
+                    if same_username and same_password:
+                        username, password = cached_username, cached_password
+                else:
+                    child.close()
+                    child.exitstatus = 0
+        except pexpect.exceptions.EOF as e:
+            pass
 
     # Prompt for username if not in env vars or cache
     if username is None:
         # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
         _show_gh_changes_warning()
-        
+
         username = _prompt_username(_("Enter username for GitHub: "))
 
     # Prompt for PAT if not in env vars or cache
@@ -259,7 +262,7 @@ def _authenticate_https(org, repo=None):
         # Some special error (like SIGINT) occured while this context manager is active, best forget credentials.
         logout()
         raise
-
+    
 
 def _show_gh_changes_warning():
     """Only once show a warning on the no password change at GitHub."""
