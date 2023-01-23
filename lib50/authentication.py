@@ -191,7 +191,7 @@ def _authenticate_https(org, repo=None):
 
     # Get username/PAT from environment variables if possible
     username = os.environ.get("CS50_GH_USER")
-    password = os.environ.get("CS50_GH_PAT")
+    password = os.environ.get("CS50_TOKEN")
 
     # Otherwise, get credentials from cache if possible
     if username is None or password is None:
@@ -262,7 +262,7 @@ def _authenticate_https(org, repo=None):
         # Some special error (like SIGINT) occured while this context manager is active, best forget credentials.
         logout()
         raise
-    
+
 
 def _show_gh_changes_warning():
     """Only once show a warning on the no password change at GitHub."""
