@@ -985,16 +985,21 @@ def _match_files(universe, pattern):
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
-    r = requests.get(url)
-    if not r.ok:
-        if r.status_code == 404:
-            raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
-        else:
-            # Check if GitHub outage may be the source of the issue
-            check_github_status()
+    try:
+        r = requests.get(url)
+        if not r.ok:
+            if r.status_code == 404:
+                raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
+            else:
+                # Check if GitHub outage may be the source of the issue
+                check_github_status()
 
-            # Otherwise raise a ConnectionError
-            raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
+                # Otherwise raise a ConnectionError
+                raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
+
+    except requests.exceptions.SSLError as e:
+        raise ConnectionError(_(f"Could not connect to GitHub due to a SSL error.\nPlease check GitHub's status at githubstatus.com.\nError: {e}"))
+
     return r.content
 
 
