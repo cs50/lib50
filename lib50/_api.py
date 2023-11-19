@@ -660,8 +660,8 @@ def check_dependencies():
         raise Error(_("You don't have git. Install git, then re-run!"))
 
     # Check that git --version > 2.7
-    version = subprocess.check_output(["git", "--version"]).decode("utf-8")
-    matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
+    _version = subprocess.check_output(["git", "--version"]).decode("utf-8")
+    matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", _version)
     if not matches or version.parse(matches.group(1)) < version.parse("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
