@@ -4,7 +4,7 @@ import glob
 import logging
 import os
 from pathlib import Path
-import pkg_resources
+from packaging import version
 import re
 import shutil
 import shlex
@@ -662,7 +662,7 @@ def check_dependencies():
     # Check that git --version > 2.7
     version = subprocess.check_output(["git", "--version"]).decode("utf-8")
     matches = re.search(r"^git version (\d+\.\d+\.\d+).*$", version)
-    if not matches or pkg_resources.parse_version(matches.group(1)) < pkg_resources.parse_version("2.7.0"):
+    if not matches or version.parse(matches.group(1)) < version.parse("2.7.0"):
         raise Error(_("You have an old version of git. Install version 2.7 or later, then re-run!"))
 
 

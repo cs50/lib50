@@ -1,9 +1,9 @@
 import pathlib as _pathlib
 import gettext as _gettext
-import pkg_resources as _pkg_resources
+from importlib.resources import files
 
 # Internationalization
-_ = _gettext.translation("lib50", _pkg_resources.resource_filename("lib50", "locale"), fallback=True).gettext
+_ = _gettext.translation("lib50", str(files("lib50").joinpath("locale")), fallback=True).gettext
 
 _LOCAL_PATH = _pathlib.Path("~/.local/share/lib50").expanduser().absolute()
 
