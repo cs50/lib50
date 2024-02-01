@@ -143,9 +143,6 @@ def _authenticate_ssh(org, repo=None):
         # while passphrase is needed, prompt and enter
         while state == State.PASSPHRASE_PROMPT:
 
-            # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
-            _show_gh_changes_warning()
-
             # Prompt passphrase
             passphrase = _prompt_password("Enter passphrase for SSH key: ")
 
@@ -172,6 +169,9 @@ def _authenticate_ssh(org, repo=None):
             username = child.match.groups()[0]
         # Failed authentication, nothing to be done
         else:
+            if not os.environ.get("CODESPACES"):
+                # If not in codespaces, show a quick reminder to check https://cs50.ly/github if not immediately authenticated
+                _show_gh_changes_warning()
             return None
     finally:
         child.close()
@@ -192,6 +192,20 @@ def _authenticate_https(org, repo=None):
     # Get username/PAT from environment variables if possible
     username = os.environ.get("CS50_GH_USER")
     password = os.environ.get("CS50_TOKEN")
+
+    # If in codespaces, check for missing environment variables and prompt user to re-login
+    if os.environ.get("CODESPACES"):
+        missing_env_vars = False
+        for env_var in ("CS50_GH_USER", "CS50_TOKEN"):
+            if os.environ.get(env_var) is None:
+                missing_env_vars = True
+                error = f"Missing environment variable {env_var}"
+                print(termcolor.colored(error, color="red", attrs=["bold"]))
+        if missing_env_vars:
+            prompt = "Please visit https://cs50.dev/restart to restart your codespace."
+            print(termcolor.colored(prompt, color="yellow", attrs=["bold"]))
+            logout()
+            sys.exit(1)
 
     # Otherwise, get credentials from cache if possible
     if username is None or password is None:
@@ -228,6 +242,7 @@ def _authenticate_https(org, repo=None):
 
     # Prompt for PAT if not in env vars or cache
     if password is None:
+
         # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
         _show_gh_changes_warning()
 
