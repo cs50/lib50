@@ -5,8 +5,6 @@ import os
 import pexpect
 import sys
 import termcolor
-import termios
-import tty
 
 from pathlib import Path
 
@@ -353,6 +351,9 @@ def _no_echo_stdin():
     On Unix only, have stdin not echo input.
     https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
     """
+    import termios
+    import tty
+
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     tty.setraw(fd)
