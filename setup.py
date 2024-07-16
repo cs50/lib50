@@ -15,7 +15,7 @@ setup(
     license="GPLv3",
     description="This is lib50, CS50's own internal library used in many of its tools.",
     long_description="This is lib50, CS50's own internal library used in many of its tools.",
-    install_requires=["attrs>=18.1,<21", "packaging", "pexpect>=4.6,<5", "pyyaml<7", "requests>=2.13,<3", "setuptools", "termcolor>=1.1,<2", "jellyfish>=0.7,<1", "cryptography>=2.7"],
+    install_requires=["attrs>=18.1,<21", "packaging", "pexpect>=4.6,<5", "pyyaml<7", "requests>=2.13,<3", "setuptools", "termcolor>=1.1,<2", "jellyfish>=0.7,<1", "cryptography>=2.7", "oslex==0.1.3", 'colorama==0.4.6; platform_system=="Windows"'],
     extras_require = {
         "develop": ["sphinx", "sphinx-autobuild", "sphinx_rtd_theme"]
     },
