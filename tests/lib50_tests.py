@@ -341,7 +341,17 @@ class TestFiles(unittest.TestCase):
     def test_invalid_utf8_filename(self):
         try:
             open(b"\xc3\x28", "w").close()
-        except OSError:
+        except:
+            # This was a block to handle OSError exception.
+            # It is converted to handle any errors as part
+            # of adding Windows support.
+            #
+            # For some reason,
+            # Python just cannot create the file with the
+            # given invalid file name on Windows. This works
+            # on Linux for creating the file which could be
+            # later tested in the else block.
+            #
             self.skipTest("can't create invalid utf8 filename")
         else:
             included, excluded = lib50.files({})
