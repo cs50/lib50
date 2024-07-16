@@ -1,6 +1,3 @@
-if __import__("os").name == "nt":
-    raise RuntimeError("lib50 does not support Windows directly. Instead, you should install the Windows Subsystem for Linux (https://docs.microsoft.com/en-us/windows/wsl/install-win10) and then install lib50 within that.")
-
 from setuptools import setup
 
 setup(
