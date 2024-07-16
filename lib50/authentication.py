@@ -351,13 +351,39 @@ def _no_echo_stdin():
     On Unix only, have stdin not echo input.
     https://stackoverflow.com/questions/510357/python-read-a-single-character-from-the-user
     """
-    import termios
-    import tty
+    if os.name == "nt":
+        import ctypes
 
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    tty.setraw(fd)
-    try:
-        yield
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        # Idea from https://stackoverflow.com/a/9218551
+        #
+        # A reference on how to pass C pointers from Python to foreign functions:
+        # https://stackoverflow.com/a/18679558
+        #
+        # Constant values are sourced from
+        # https://learn.microsoft.com/en-us/windows/console/SetConsoleMode
+
+        STD_INPUT_HANDLE = 2 ** 32 - 10
+        stdin_handle = ctypes.windll.kernel32.GetStdHandle(ctypes.c_uint32(STD_INPUT_HANDLE))
+
+        old_mode = ctypes.c_uint32()
+        ctypes.windll.kernel32.GetConsoleMode(stdin_handle, ctypes.byref(old_mode))
+
+        ENABLE_ECHO_INPUT = 0x0004
+        new_mode = ctypes.c_uint32(old_mode.value & (~ENABLE_ECHO_INPUT))
+
+        try:
+            ctypes.windll.kernel32.SetConsoleMode(stdin_handle, new_mode)
+            yield
+        finally:
+            ctypes.windll.kernel32.SetConsoleMode(stdin_handle, old_mode)
+    else:
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        tty.setraw(fd)
+        try:
+            yield
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
