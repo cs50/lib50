@@ -245,12 +245,20 @@ class TestGetLocalSlugs(unittest.TestCase):
         os.makedirs(path)
         with open(path / ".cs50.yml", "w") as f:
             f.write("foo50: true\n")
-        pexpect.run(f"git -C {path.parent.parent} init")
-        pexpect.run(f'git -C {path.parent.parent} config user.name "foo"')
-        pexpect.run(f'git -C {path.parent.parent} config user.email "bar@baz.com"')
-        pexpect.run(f"git -C {path.parent.parent} checkout -b main")
-        pexpect.run(f"git -C {path.parent.parent} add .")
-        pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
+
+        from pexpect.popen_spawn import PopenSpawn
+        child = PopenSpawn(f"git -C {path.parent.parent} init")
+        child.proc.wait()
+        child = PopenSpawn(f'git -C {path.parent.parent} config user.name "foo"')
+        child.proc.wait()
+        child = PopenSpawn(f'git -C {path.parent.parent} config user.email "bar@baz.com"')
+        child.proc.wait()
+        child = PopenSpawn(f"git -C {path.parent.parent} checkout -b main")
+        child.proc.wait()
+        child = PopenSpawn(f"git -C {path.parent.parent} add .")
+        child.proc.wait()
+        child = PopenSpawn(f"git -C {path.parent.parent} commit -m \"message\"")
+        child.proc.wait()
 
     def tearDown(self):
         lib50.set_local_path(self.old_path)

@@ -16,7 +16,10 @@ import time
 import functools
 
 import jellyfish
+
 import pexpect
+import pexpect.popen_spawn
+
 import requests
 import termcolor
 # https://stackoverflow.com/a/21859983
@@ -925,7 +928,7 @@ class _StreamToLogger:
 def spawn(command, quiet=False, timeout=None):
     """Run (spawn) a command with `pexpect.spawn`"""
     # Spawn command
-    child = pexpect.spawn(
+    child = pexpect.popen_spawn.PopenSpawn(
         command,
         encoding="utf-8",
         env=dict(os.environ),
@@ -937,17 +940,21 @@ def spawn(command, quiet=False, timeout=None):
             child.logfile_read = _StreamToLogger(logger.debug)
         yield child
     except BaseException:
-        child.close()
+        child.flush()
+        child.proc.wait(timeout=timeout)
         raise
     else:
-        if child.isalive():
+        if not child.proc.poll():
             try:
                 child.expect(pexpect.EOF, timeout=timeout)
             except pexpect.TIMEOUT:
                 raise Error()
-        child.close(force=True)
-        if child.signalstatus is None and child.exitstatus != 0:
-            logger.debug("{} exited with {}".format(command, child.exitstatus))
+
+        child.flush()
+        child.proc.wait(timeout=timeout)
+
+        if child.signalstatus is None and child.proc.returncode != 0:
+            logger.debug("{} exited with {}".format(command, child.proc.returncode))
             raise Error()
 
 
