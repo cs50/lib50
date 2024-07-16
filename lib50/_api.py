@@ -326,6 +326,21 @@ def files(patterns,
             invalid.add(file)
     included -= invalid
 
+    # On Windows, convert Windows paths to *nix paths.
+    if os.name == "nt":
+        import pathlib
+
+        new_included_set = set()
+        for path in included:
+            new_included_set.add(pathlib.PurePath(path).as_posix())
+        included = new_included_set
+
+        new_excluded_set = set()
+        for path in excluded:
+            new_excluded_set.add(pathlib.PurePath(path).as_posix())
+        excluded = new_excluded_set
+
+
     return included, excluded
 
 
@@ -988,7 +1003,7 @@ def _match_files(universe, pattern):
 
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
-    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath.as_posix())
     try:
         r = requests.get(url)
         if not r.ok:
