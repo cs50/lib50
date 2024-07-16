@@ -19,6 +19,10 @@ import jellyfish
 import pexpect
 import requests
 import termcolor
+# https://stackoverflow.com/a/21859983
+if os.name == "nt":
+    import colorama
+    colorama.init()
 
 from . import _, get_local_path
 from ._errors import *
