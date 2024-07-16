@@ -817,7 +817,7 @@ class Slug:
             cmd = f"git ls-remote --heads {self.origin}"
             try:
                 with spawn(cmd, timeout=3) as child:
-                    output = child.read().strip().split("\r\n")
+                    output = child.read().strip().replace("\r", "").split("\n")
             except pexpect.TIMEOUT:
                 if "Username for" in child.buffer:
                     return []
