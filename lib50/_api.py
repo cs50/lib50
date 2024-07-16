@@ -7,7 +7,7 @@ from pathlib import Path
 from packaging import version
 import re
 import shutil
-import shlex
+import oslex
 import subprocess
 import sys
 import tempfile
@@ -426,7 +426,7 @@ def prepare(tool, branch, user, included):
     """
     with working_area(included) as area:
         with ProgressBar(_("Verifying")):
-            Git.working_area = f"-C {shlex.quote(str(area))}"
+            Git.working_area = f"-C {oslex.quote(str(area))}"
             git = Git().set(Git.working_area)
 
             # Clone just .git folder
@@ -464,7 +464,7 @@ def prepare(tool, branch, user, included):
             run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
             # Git add all included files
-            run(git(f"add -f {' '.join(shlex.quote(f) for f in included)}"))
+            run(git(f"add -f {' '.join(oslex.quote(f) for f in included)}"))
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:
@@ -690,7 +690,7 @@ class Git:
 
     def set(self, git_arg, **format_args):
         """git = Git().set("-C {folder}", folder="foo")"""
-        format_args = {name: shlex.quote(arg) for name, arg in format_args.items()}
+        format_args = {name: oslex.quote(arg) for name, arg in format_args.items()}
         git = Git()
         git._args = self._args[:]
         git._args.append(git_arg.format(**format_args))
@@ -797,7 +797,7 @@ class Slug:
         """Get branches from org/repo."""
         if self.offline:
             local_path = get_local_path() / self.org / self.repo
-            output = run(f"git -C {shlex.quote(str(local_path))} show-ref --heads").split("\n")
+            output = run(f"git -C {oslex.quote(str(local_path))} show-ref --heads").split("\n")
         else:
             cmd = f"git ls-remote --heads {self.origin}"
             try:
