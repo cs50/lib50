@@ -159,8 +159,8 @@ class TestGetConfigFilepath(unittest.TestCase):
         os.chdir(self.working_directory.name)
 
     def tearDown(self):
-        self.working_directory.cleanup()
         os.chdir(self.old_cwd)
+        self.working_directory.cleanup()
 
     def test_no_config(self):
         with self.assertRaises(lib50._errors.Error):

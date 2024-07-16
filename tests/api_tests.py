@@ -128,9 +128,9 @@ class TestSlug(unittest.TestCase):
             self.assertEqual(slug.branch, "main")
             self.assertEqual(slug.problem, pathlib.Path("baz"))
         finally:
+            os.chdir(old_wd)
             lib50.set_local_path(old_local_path)
             temp_dir.cleanup()
-            os.chdir(old_wd)
 
     def test_wrong_slug_offline(self):
         with self.assertRaises(lib50._api.InvalidSlugError):
@@ -253,8 +253,8 @@ class TestGetLocalSlugs(unittest.TestCase):
         pexpect.run(f"git -C {path.parent.parent} commit -m \"message\"")
 
     def tearDown(self):
-        self.temp_dir.cleanup()
         lib50.set_local_path(self.old_path)
+        self.temp_dir.cleanup()
 
     def test_one_local_slug(self):
         slugs = list(lib50.get_local_slugs("foo50"))

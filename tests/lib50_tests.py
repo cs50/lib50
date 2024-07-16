@@ -23,8 +23,8 @@ class TestConnect(unittest.TestCase):
         os.chdir(self.working_directory.name)
 
     def tearDown(self):
-        self.working_directory.cleanup()
         os.chdir(self._wd)
+        self.working_directory.cleanup()
 
     def test_connect(self):
         f = io.StringIO()
@@ -71,8 +71,8 @@ class TestFiles(unittest.TestCase):
         os.chdir(self.working_directory.name)
 
     def tearDown(self):
-        self.working_directory.cleanup()
         os.chdir(self._wd)
+        self.working_directory.cleanup()
 
     def test_exclude_only_one(self):
         content = \
@@ -465,8 +465,8 @@ class TestLocal(unittest.TestCase):
         os.chdir(self.working_directory.name)
 
     def tearDown(self):
-        self.working_directory.cleanup()
         os.chdir(self._wd)
+        self.working_directory.cleanup()
 
     def test_local(self):
         local_dir = lib50.local("cs50/lib50/tests/bar")
@@ -506,8 +506,8 @@ class TestWorkingArea(unittest.TestCase):
             pass
 
     def tearDown(self):
-        self.working_directory.cleanup()
         os.chdir(self._wd)
+        self.working_directory.cleanup()
 
     def test_empty(self):
         with lib50.working_area([]) as working_area:
