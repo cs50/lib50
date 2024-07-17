@@ -3,8 +3,10 @@ import contextlib
 import enum
 import os
 import pexpect
+import pexpect.popen_spawn
 import sys
 import termcolor
+import oslex
 
 from pathlib import Path
 
@@ -111,7 +113,14 @@ def _authenticate_ssh(org, repo=None):
         NEW_KEY = 3
 
     # Require ssh-agent
-    child = pexpect.spawn("ssh -p443 -T git@ssh.github.com", encoding="utf8")
+    import shutil
+    path_to_ssh_binary = shutil.which("ssh")
+    if not path_to_ssh_binary:
+        print("Your system does not have ssh installed or ssh binary is not in your PATH." \
+            " Falling back to HTTPS authentication.")
+        return None
+
+    child = pexpect.popen_spawn.PopenSpawn(f"{oslex.quote(path_to_ssh_binary)} -p443 -T git@ssh.github.com", encoding="utf8")
 
     # GitHub prints 'Hi {username}!...' when attempting to get shell access
     try:
@@ -172,7 +181,8 @@ def _authenticate_ssh(org, repo=None):
                 _show_gh_changes_warning()
             return None
     finally:
-        child.close()
+        child.flush()
+        child.proc.wait(timeout=5)
 
     return User(name=username,
                 repo=f"ssh://git@ssh.github.com:443/{org}/{username if repo is None else repo}",
@@ -226,8 +236,10 @@ def _authenticate_https(org, repo=None):
                     if same_username and same_password:
                         username, password = cached_username, cached_password
                 else:
-                    child.close()
+                    child.flush()
+                    child.proc.wait(timeout=5)
                     child.exitstatus = 0
+                    child.proc.returncode = 0
         except pexpect.exceptions.EOF as e:
             pass
 
