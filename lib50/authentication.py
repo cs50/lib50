@@ -193,8 +193,19 @@ def _authenticate_ssh(org, repo=None):
 @contextlib.contextmanager
 def _authenticate_https(org, repo=None):
     """Try authenticating via HTTPS, if succesful yields User, otherwise raises Error."""
-    _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
-    api.Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+
+    # Git on Windows does not support Unix sockets(it is not compiled with them on Windows 10
+    # and previous Windows versions do not have it) which makes the credential.helper=cache
+    # invalid.
+    # We are switching to Git Credential Manager for Windows.
+    #
+    # Reference: https://stackoverflow.com/a/5343146
+    if os.name != "nt":
+        _CREDENTIAL_SOCKET.parent.mkdir(mode=0o700, exist_ok=True)
+        api.Git.cache = f"-c credential.helper= -c credential.helper='cache --socket {_CREDENTIAL_SOCKET}'"
+    else:
+        api.Git.cache = "-c credential.helper=manager"
+
     git = api.Git().set(api.Git.cache)
 
     # Get username/PAT from environment variables if possible
@@ -225,9 +236,10 @@ def _authenticate_https(org, repo=None):
                 i = child.expect([
                     "Username for '.+'",
                     "Password for '.+'",
-                    "username=([^\r]+)\r\npassword=([^\r]+)\r\n"
+                    "username=([^\r]+)\r\npassword=([^\r]+)\r\n",
+                    "username=(.+)\npassword=(.+)\n"
                 ])
-                if i == 2:
+                if i == 2 or i == 3:
                     cached_username, cached_password = child.match.groups()
 
                     # if cached credentials differ from existing env variables, don't use cache
