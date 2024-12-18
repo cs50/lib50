@@ -439,7 +439,8 @@ def prepare(tool, branch, user, included):
                 else:
                     msg += _("please go to {} in your web browser and try again.").format(AUTH_URL)
 
-                msg += _((" For instructions on how to set up a personal access token, please visit https://cs50.ly/github"))
+                if not os.environ.get("CODESPACES"):
+                    msg += _((" For instructions on how to set up a personal access token, please visit https://cs50.readthedocs.io/github"))
 
                 raise Error(msg)
 

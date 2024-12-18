@@ -170,8 +170,8 @@ def _authenticate_ssh(org, repo=None):
         # Failed authentication, nothing to be done
         else:
             if not os.environ.get("CODESPACES"):
-                # If not in codespaces, show a quick reminder to check https://cs50.ly/github if not immediately authenticated
                 _show_gh_changes_warning()
+                
             return None
     finally:
         child.close()
@@ -235,16 +235,15 @@ def _authenticate_https(org, repo=None):
 
     # Prompt for username if not in env vars or cache
     if username is None:
-        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
-        _show_gh_changes_warning()
+        if not os.environ.get("CODESPACES"):
+            _show_gh_changes_warning()
 
         username = _prompt_username(_("Enter username for GitHub: "))
 
     # Prompt for PAT if not in env vars or cache
     if password is None:
-
-        # Show a quick reminder to check https://cs50.ly/github if not immediately authenticated
-        _show_gh_changes_warning()
+        if not os.environ.get("CODESPACES"):
+            _show_gh_changes_warning()
 
         password = _prompt_password(_("Enter personal access token for GitHub: "))
 
@@ -267,7 +266,7 @@ def _authenticate_https(org, repo=None):
         if not isinstance(e, RejectedHonestyPromptError):
             msg = _("You might be using your GitHub password to log in," \
             " but that's no longer possible. But you can still use" \
-            " check50 and submit50! See https://cs50.ly/github for instructions.")
+            " check50 and submit50! See https://cs50.readthedocs.io/github for instructions.")
             print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
 
         # Some error occured while this context manager is active, best forget credentials.
@@ -284,7 +283,7 @@ def _show_gh_changes_warning():
     if not hasattr(_show_gh_changes_warning, "showed"):
         warning = "GitHub now requires that you use SSH or a personal access token"\
                         " instead of a password to log in, but you can still use check50 and submit50!"\
-                        " See https://cs50.ly/github for instructions if you haven't already!"
+                        " See https://cs50.readthedocs.io/github for instructions if you haven't already!"
         print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
     _show_gh_changes_warning.showed = True
 
