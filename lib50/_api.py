@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import functools
+from getpass import getpass
 
 import jellyfish
 import pexpect
@@ -844,6 +845,7 @@ class ProgressBar:
     """
     DISABLED = False
     TICKS_PER_SECOND = 2
+    GLOBAL_STOP_SIGNAL = False
 
     def __init__(self, message, output_stream=None):
         """
@@ -852,6 +854,8 @@ class ProgressBar:
         :param output_stream: a stream to write the progress bar to
         :type output_stream: a stream or file-like object
         """
+
+        ProgressBar.GLOBAL_STOP_SIGNAL = False
 
         if output_stream is None:
             output_stream = sys.stderr
@@ -871,6 +875,9 @@ class ProgressBar:
         def progress_runner():
             self._print(f"{self._message}...", end="", flush=True)
             while self._progressing:
+                if ProgressBar.GLOBAL_STOP_SIGNAL:
+                    ProgressBar.GLOBAL_STOP_SIGNAL = False
+                    break
                 self._print(".", end="", flush=True)
                 time.sleep(1 / ProgressBar.TICKS_PER_SECOND if ProgressBar.TICKS_PER_SECOND else 0)
             self._print()
@@ -934,15 +941,35 @@ def spawn(command, quiet=False, timeout=None):
 
 
 def run(command, quiet=False, timeout=None):
-    """Run a command, returns command output."""
+    """Run a command. Automatically handles SSH passphrase prompts."""
     try:
         with spawn(command, quiet, timeout) as child:
-            command_output = child.read().strip().replace("\r\n", "\n")
+            # Try to catch passphrase prompt automatically
+            try:
+                child.expect(r"^Enter passphrase .*:")
+                ProgressBar.GLOBAL_STOP_SIGNAL = True
+                time.sleep(1)
+                passphrase = getpass("🔐 SSH Key Passphrase: ")
+                child.sendline(passphrase)
+            except pexpect.exceptions.EOF:
+                pass  # No prompt, continue
+
+            # Ensure full output is captured, including final line with no trailing newline
+            # `expect(EOF)` may miss the last line if it doesn't end with a newline (e.g., git rev-parse)
+            command_output = child.before + child.read()
+            command_output = command_output.strip().replace("\r\n", "\n")
+
+            # If a fatal error appears in output, print it and exit
+            if any(line.startswith("fatal:") for line in command_output.splitlines()):
+                print(termcolor.colored(command_output, "red", attrs=["bold"]))
+                exit(1)
+
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
 
     return command_output
+
 
 
 def _glob(pattern, skip_dirs=False, limit=DEFAULT_FILE_LIMIT):
