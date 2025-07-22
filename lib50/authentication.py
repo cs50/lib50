@@ -3,6 +3,7 @@ import contextlib
 import enum
 import os
 import pexpect
+import re
 import sys
 import termcolor
 import termios
@@ -12,7 +13,7 @@ from pathlib import Path
 
 from . import _
 from . import _api as api
-from ._errors import ConnectionError, RejectedHonestyPromptError
+from ._errors import ConnectionError, InvalidBranchError, RejectedHonestyPromptError
 
 __all__ = ["User", "authenticate", "logout"]
 
@@ -83,6 +84,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
             match = child.expect([
                 "Enter passphrase for key",
                 "Password for",
+                "cannot lock ref",
                 pexpect.EOF
             ])
 
@@ -93,6 +95,28 @@ def run_authenticated(user, command, quiet=False, timeout=None):
             # In case "Password for" appears, https authentication failed
             elif match == 1:
                 raise ConnectionError
+            # In case "cannot lock ref" appears, a conflict with an existing branch prefix
+            elif match == 2:
+                # Get the full output by reading until EOF
+                full_output = child.before + child.after + child.read()
+                command_output = full_output.strip().replace("\r\n", "\n")
+
+                # Try to extract the conflicting branch prefix from the error message
+                # Pattern: 'refs/heads/cs50/problems/2025/x' exists
+                branch_prefix_match = re.search(r"'refs/heads/([^']+)' exists", command_output)
+                
+                if branch_prefix_match:
+                    conflicting_prefix = branch_prefix_match.group(1)
+                    error_msg = _("Looks like you're trying to push to a branch that conflicts with an existing one in the repository.\n"
+                                  f"The branch prefix '{conflicting_prefix}' already exists.\n"
+                                  f"You can view the existing branches at {user.repo}/branches"
+                                  )
+                else:
+                    error_msg = _("You are trying to push to a branch that is not allowed.\n"
+                                  f"You can view the existing branches at {user.repo}/branches"
+                                  )
+
+                raise InvalidBranchError(error_msg)
 
             command_output = child.read().strip().replace("\r\n", "\n")
 
@@ -263,7 +287,7 @@ def _authenticate_https(org, repo=None):
     except Exception as e:
 
         # Do not prompt message if user rejects the honesty prompt
-        if not isinstance(e, RejectedHonestyPromptError):
+        if not isinstance(e, RejectedHonestyPromptError) and not isinstance(e, InvalidBranchError):
             msg = _("You might be using your GitHub password to log in," \
             " but that's no longer possible. But you can still use" \
             " check50 and submit50! See https://cs50.readthedocs.io/github for instructions.")
