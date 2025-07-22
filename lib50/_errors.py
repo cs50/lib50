@@ -6,6 +6,7 @@ __all__ = [
     "InvalidSlugError",
     "MissingFilesError",
     "TooManyFilesError",
+    "InvalidBranchError",
     "InvalidConfigError",
     "MissingToolError",
     "TimeoutError",
@@ -75,6 +76,11 @@ class TooManyFilesError(Error):
             _("You are currently in: {}, did you perhaps intend another directory?".format(dir))
         ))
         self.payload.update(limit=limit, dir=dir)
+
+
+class InvalidBranchError(Error):
+    """A ``lib50.Error`` signalling that a branch prefix is invalid."""
+    pass
 
 
 class InvalidConfigError(Error):
