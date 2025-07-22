@@ -460,9 +460,15 @@ def prepare(tool, branch, user, included):
             # Switch to branch without checkout
             run(git("symbolic-ref HEAD {ref}", ref=f"refs/heads/{branch}"))
 
-            # Git add all included files individually to handle files with special characters
-            for file in included:
-                run(git("add -f -- {file}", file=file))
+            # Git add all included files in batches
+            def batch_files(files, size=100):
+                files_list = list(files)
+                for i in range(0, len(files_list), size):
+                    yield files_list[i:i + size]
+            
+            for batch in batch_files(included):
+                quoted_files = ' '.join(shlex.quote(f) for f in batch)
+                run(git(f"add -f -- {quoted_files}"))
 
             # Remove gitattributes from included
             if Path(".gitattributes").exists() and ".gitattributes" in included:

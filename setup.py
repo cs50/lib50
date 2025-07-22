@@ -27,6 +27,6 @@ setup(
     python_requires=">= 3.6",
     packages=["lib50"],
     url="https://github.com/cs50/lib50",
-    version="3.0.13",
+    version="3.0.14",
     include_package_data=True
 )
