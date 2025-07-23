@@ -22,7 +22,7 @@ import termcolor
 
 from . import _, get_local_path
 from ._errors import *
-from .authentication import authenticate, logout, run_authenticated
+from .authentication import authenticate, logout, run_authenticated, _prompt_password
 from . import config as lib50_config
 
 __all__ = ["push", "local", "working_area", "files", "connect",
@@ -851,6 +851,7 @@ class ProgressBar:
     """
     DISABLED = False
     TICKS_PER_SECOND = 2
+    _active_instances = []
 
     def __init__(self, message, output_stream=None):
         """
@@ -874,6 +875,12 @@ class ProgressBar:
             self._progressing = False
             self._thread.join()
 
+    @classmethod
+    def stop_all(cls):
+        """Stop all active progress bars."""
+        for instance in cls._active_instances[:]:
+            instance.stop()
+
     def __enter__(self):
         def progress_runner():
             self._print(f"{self._message}...", end="", flush=True)
@@ -881,6 +888,8 @@ class ProgressBar:
                 self._print(".", end="", flush=True)
                 time.sleep(1 / ProgressBar.TICKS_PER_SECOND if ProgressBar.TICKS_PER_SECOND else 0)
             self._print()
+
+        ProgressBar._active_instances.append(self)
 
         if not ProgressBar.DISABLED:
             self._progressing = True
@@ -893,6 +902,10 @@ class ProgressBar:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+        try:
+            ProgressBar._active_instances.remove(self)
+        except ValueError:
+            pass
 
 
 class _StreamToLogger:
@@ -941,9 +954,28 @@ def spawn(command, quiet=False, timeout=None):
 
 
 def run(command, quiet=False, timeout=None):
-    """Run a command, returns command output."""
+    """Run a command, prompt for passphrase if needed, returns command output."""
     try:
         with spawn(command, quiet, timeout) as child:
+            
+            match = child.expect([
+                r"^Enter passphrase.*:",
+                pexpect.EOF,
+            ])
+
+            if match == 0:
+                ProgressBar.stop_all()
+                passphrase = _prompt_password("Enter passphrase for SSH key: ")
+                child.sendline(passphrase)
+        
+                # Get the full output by reading until EOF
+                full_output = child.before + child.after + child.read()
+                command_output = full_output.strip().replace("\r\n", "\n")
+
+                # Check if the command output indicates an incorrect passphrase
+                if re.search(r"incorrect.*passphrase", command_output, re.IGNORECASE):
+                    raise Error(command_output)
+            
             command_output = child.read().strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
