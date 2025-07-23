@@ -947,7 +947,7 @@ def spawn(command, quiet=False, timeout=None):
 
 
 def run(command, quiet=False, timeout=None):
-    """Run a command. Automatically handles SSH passphrase prompts."""
+    """Run a command, prompt for passphrase if needed, returns command output."""
     try:
         with spawn(command, quiet, timeout) as child:
             
@@ -970,13 +970,11 @@ def run(command, quiet=False, timeout=None):
                     raise Error(command_output)
             
             command_output = child.read().strip().replace("\r\n", "\n")
-
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
 
     return command_output
-
 
 
 def _glob(pattern, skip_dirs=False, limit=DEFAULT_FILE_LIMIT):
