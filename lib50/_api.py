@@ -957,12 +957,7 @@ def run(command, quiet=False, timeout=None):
     """Run a command, prompt for passphrase if needed, returns command output."""
     try:
         with spawn(command, quiet, timeout) as child:
-            
-            match = child.expect([
-                r"^Enter passphrase.*:",
-                pexpect.EOF,
-            ])
-
+            match = child.expect([r"^Enter passphrase.*:"])
             if match == 0:
                 ProgressBar.stop_all()
                 passphrase = _prompt_password("Enter passphrase for SSH key: ")
@@ -975,8 +970,9 @@ def run(command, quiet=False, timeout=None):
                 # Check if the command output indicates an incorrect passphrase
                 if re.search(r"incorrect.*passphrase", command_output, re.IGNORECASE):
                     raise Error(command_output)
-            
-            command_output = child.read().strip().replace("\r\n", "\n")
+
+    except pexpect.EOF:
+        command_output = child.before.strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
         raise TimeoutError(timeout)
