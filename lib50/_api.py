@@ -469,7 +469,7 @@ def prepare(tool, branch, user, included):
                 files_list = list(files)
                 for i in range(0, len(files_list), size):
                     yield files_list[i:i + size]
-
+            
             for batch in batch_files(included):
                 quoted_files = ' '.join(shlex.quote(f) for f in batch)
                 run(git(f"add -f -- {quoted_files}"))
@@ -966,7 +966,7 @@ def run(command, quiet=False, timeout=None):
                 ProgressBar.stop_all()
                 passphrase = _prompt_password("Enter passphrase for SSH key: ")
                 child.sendline(passphrase)
-
+        
                 # Get the full output by reading until EOF
                 full_output = child.before + child.after + child.read()
                 command_output = full_output.strip().replace("\r\n", "\n")

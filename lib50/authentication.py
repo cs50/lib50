@@ -121,7 +121,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
                 # Try to extract the conflicting branch prefix from the error message
                 # Pattern: 'refs/heads/cs50/problems/2025/x' exists
                 branch_prefix_match = re.search(r"'refs/heads/([^']+)' exists", command_output)
-
+                
                 if branch_prefix_match:
                     conflicting_prefix = branch_prefix_match.group(1)
                     error_msg = _("Looks like you're trying to push to a branch that conflicts with an existing one in the repository.\n"
@@ -212,7 +212,7 @@ def _authenticate_ssh(org, repo=None):
         else:
             if not os.environ.get("CODESPACES"):
                 _show_gh_changes_warning()
-
+                
             return None
     finally:
         child.close()
