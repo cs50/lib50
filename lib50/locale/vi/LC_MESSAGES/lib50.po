@@ -33,7 +33,7 @@ msgid ""
 "Cannot include/exclude paths outside the current directory, but such a "
 "path ({}) was specified."
 msgstr ""
-"Không thể bao gồm/loại trừ các đường dẫn bên ngoài thư mục này, nhưng
+"Không thể bao gồm/loại trừ các đường dẫn bên ngoài thư mục này, nhưng "
 "đường dẫn ({}) đã được chỉ định."
 
 #: lib50/_api.py:355
@@ -65,7 +65,7 @@ msgid ""
 "Make sure your username and/or personal access token are valid and {} is "
 "enabled for your account. To enable {}, "
 msgstr ""
-"Hãy đảm bảo username và/hoặc mã truy cập cá nhân của bạn hợp lệ và {} đã
+"Hãy đảm bảo username và/hoặc mã truy cập cá nhân của bạn hợp lệ và {} đã "
 "được bật cho tài khoản của bạn. Để bật {}, "
 
 #: lib50/_api.py:438
