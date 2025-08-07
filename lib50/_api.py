@@ -39,7 +39,7 @@ AUTH_URL = "https://submit.cs50.io"
 DEFAULT_FILE_LIMIT = 10000
 
 
-def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT):
+def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT, auth_method=None):
     """
     Pushes to Github in name of a tool.
     What should be pushed is configured by the tool and its configuration in the .cs50.yml file identified by the slug.
@@ -61,6 +61,10 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     :type prompt: lambda str, list, list => bool, optional
     :param file_limit: maximum number of files to be matched by any globbing pattern.
     :type file_limit: int
+    :param auth_method: The authentication method to use.  Accepts `"https"` or `"ssh"`. \
+                        If any other value is provided, attempts SSH \
+                        authentication first and fall back to HTTPS if SSH fails.
+    :type auth_method: str
     :return: GitHub username and the commit hash
     :type: tuple(str, str)
 
@@ -89,7 +93,7 @@ def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question
     remote, (honesty, included, excluded) = connect(slug, config_loader, file_limit=DEFAULT_FILE_LIMIT)
 
     # Authenticate the user with GitHub, and prepare the submission
-    with authenticate(remote["org"], repo=repo) as user, prepare(tool, slug, user, included):
+    with authenticate(remote["org"], repo=repo, auth_method=auth_method) as user, prepare(tool, slug, user, included):
 
         # Show any prompt if specified
         if prompt(honesty, included, excluded):

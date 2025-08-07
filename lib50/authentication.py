@@ -32,14 +32,18 @@ class User:
                     init=False)
 
 @contextlib.contextmanager
-def authenticate(org, repo=None):
+def authenticate(org, repo=None, auth_method=None):
     """
-    A contextmanager that authenticates a user with GitHub via SSH if possible, otherwise via HTTPS.
+    A contextmanager that authenticates a user with GitHub.
 
     :param org: GitHub organisation to authenticate with
     :type org: str
     :param repo: GitHub repo (part of the org) to authenticate with. Default is the user's GitHub login.
     :type repo: str, optional
+    :param auth_method: The authentication method to use.  Accepts `"https"` or `"ssh"`. \
+                        If any other value is provided, attempts SSH \
+                        authentication first and fall back to HTTPS if SSH fails.
+    :type auth_method: str, optional
     :return: an authenticated user
     :type: lib50.User
 
@@ -51,21 +55,34 @@ def authenticate(org, repo=None):
             print(user.name)
 
     """
-    with api.ProgressBar(_("Authenticating")) as progress_bar:
+    def try_https(org, repo):
+        with _authenticate_https(org, repo=repo) as user:
+            return user
+
+    def try_ssh(org, repo):
+        user = _authenticate_ssh(org, repo=repo)
+        if user is None:
+            raise ConnectionError
+        return user
+
+    # Showcase the type of authentication based on input
+    method_label = f" ({auth_method.upper()})" if auth_method in ("https", "ssh") else ""
+    with api.ProgressBar(_("Authenticating{}").format(method_label)) as progress_bar:
         # Both authentication methods can require user input, best stop the bar
         progress_bar.stop()
 
-        # Try auth through SSH
-        user = _authenticate_ssh(org, repo=repo)
-
-        # SSH auth failed, fallback to HTTPS
-        if user is None:
-            with _authenticate_https(org, repo=repo) as user:
-                yield user
-        # yield SSH user
-        else:
-            yield user
-
+        match auth_method:
+            case "https":
+                yield try_https(org, repo)
+            case "ssh":
+                yield try_ssh(org, repo)
+            case _:
+                # Try auth through SSH
+                try:
+                    yield try_ssh(org, repo)
+                except ConnectionError:
+                    # SSH auth failed, fallback to HTTPS
+                    yield try_https(org, repo)
 
 def logout():
     """
