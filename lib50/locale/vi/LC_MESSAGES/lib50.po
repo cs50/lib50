@@ -1,0 +1,243 @@
+# Vietnamese translations for lib50.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the lib50 project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: lib50 3.1.1\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-08-05 15:21-0400\n"
+"PO-Revision-Date: 2025-08-05 15:21-0400\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: vi\n"
+"Language-Team: vi <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: lib50/_api.py:101
+msgid "No files were submitted."
+msgstr "Không có tập tin nào để nộp."
+
+#: lib50/_api.py:158
+#, python-brace-format
+msgid "{} does not exist at {}/{}"
+msgstr "{} không tồn tại tại {}/{}"
+
+#: lib50/_api.py:286
+#, python-brace-format
+msgid ""
+"Cannot include/exclude paths outside the current directory, but such a "
+"path ({}) was specified."
+msgstr ""
+"Không thể bao gồm/loại trừ các đường dẫn bên ngoài thư mục này, nhưng "
+"đường dẫn ({}) đã được chỉ định."
+
+#: lib50/_api.py:355
+msgid "Connecting"
+msgstr "Đang kết nối"
+
+#: lib50/_api.py:363
+#, python-brace-format
+msgid "Invalid slug for {}. Did you mean something else?"
+msgstr "Slug cho {} không hợp lệ."
+
+#: lib50/_api.py:372
+#, python-brace-format
+msgid "Go to {results} to see your results."
+msgstr "Vui lòng đến {results} để xem kết qủa của bạn."
+
+#: lib50/_api.py:385
+#, python-brace-format
+msgid "No files in this directory are expected by {}."
+msgstr "Thư mục này không có tập tin nào {} đang mong đợi."
+
+#: lib50/_api.py:424
+msgid "Verifying"
+msgstr "Đang thảm tra"
+
+#: lib50/_api.py:436
+#, python-brace-format
+msgid ""
+"Make sure your username and/or personal access token are valid and {} is "
+"enabled for your account. To enable {}, "
+msgstr ""
+"Hãy đảm bảo username và/hoặc mã truy cập cá nhân của bạn hợp lệ và {} đã "
+"được bật cho tài khoản của bạn. Để bật {}, "
+
+#: lib50/_api.py:438
+msgid "please contact your instructor."
+msgstr "vui lòng liên hệ với giáo viên."
+
+#: lib50/_api.py:440
+#, python-brace-format
+msgid "please go to {} in your web browser and try again."
+msgstr "vui lòng đến {} và thử lại."
+
+#: lib50/_api.py:447
+msgid "Preparing"
+msgstr "Đang chuẩn bị"
+
+#: lib50/_api.py:510
+msgid "Uploading"
+msgstr "Đang tải lên"
+
+#: lib50/_api.py:511
+#, python-brace-format
+msgid "automated commit by {}"
+msgstr "commit tự động bởi {}"
+
+#: lib50/_api.py:564
+#, python-brace-format
+msgid "Invalid slug: {}. Did you mean something else?"
+msgstr "Slug này không hợp lệ: {}. "
+
+#: lib50/_api.py:568
+#, python-brace-format
+msgid "Invalid slug: {}. Multiple configurations (both .yaml and .yml) found."
+msgstr "Slug này không hợp lệ: {} Đã tìm thấy nhiều cấu hình (cả .yaml và .yml)."
+
+#: lib50/_api.py:668
+msgid "You don't have git. Install git, then re-run!"
+msgstr "Bạn không có git. Vui lòng cài đặt git và thử lại."
+
+#: lib50/_api.py:674
+msgid "You have an old version of git. Install version 2.7 or later, then re-run!"
+msgstr "Bạn đang sử dụng phiên bản git cũ. Hãy cài đặt phiên bản 2.7 trở lên, sau đó thử lại."
+
+#: lib50/_api.py:758 lib50/_api.py:828
+msgid "Invalid slug"
+msgstr "Slug này không hợp lệ."
+
+#: lib50/_api.py:786
+#, python-brace-format
+msgid "Invalid slug: {}"
+msgstr "Slug này không hợp lệ: {}"
+
+#: lib50/_api.py:792
+#, python-brace-format
+msgid "Invalid slug. Did you mean {}, without the leading and trailing slashes?"
+msgstr "Slug này không hợp lệ. Ý bạn là {}, không có dấu gạch chéo ở đầu và cuối phải không?"
+
+#: lib50/_api.py:795
+#, python-brace-format
+msgid "Invalid slug. Did you mean {}, without the leading slash?"
+msgstr "Slug này không hợp lệ. Ý bạn là {}, không có dấu gạch chéo ở đầu phải không?"
+
+#: lib50/_api.py:798
+#, python-brace-format
+msgid "Invalid slug. Did you mean {}, without the trailing slash?"
+msgstr "Slug này không hợp lệ. Ý bạn là {}, không có dấu gạch chéo ở cuối phải không?"
+
+#: lib50/_api.py:1028
+msgid "Invalid slug. Did you mean to submit something else?"
+msgstr "Slug này không hợp lệ. Bạn có ý định nộp bài khác không?"
+
+#: lib50/_api.py:1034 lib50/_api.py:1056
+msgid ""
+"Could not connect to GitHub. Do make sure you are connected to the "
+"internet."
+msgstr ""
+"Không kết nối với GitHub được. Hãy đảm bảo bạn đã kết nối với "
+"internet."
+
+#: lib50/_api.py:1066
+#, python-brace-format
+msgid ""
+"Could not connect to GitHub. It looks like GitHub is having some issues "
+"with {}. Do check on https://www.githubstatus.com and try again later."
+msgstr ""
+"Không kết nối với GitHub được. GitHub có vẻ bị vấn đề về {}."
+"Vui lòng kiểm tra tại https://www.githubstatus.com và thử lại sau."
+
+#: lib50/_api.py:1089
+#, python-brace-format
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Remove these files from your directory and then re-run!"
+msgstr ""
+"Những tập tin này quá lớn để nộp:\n"
+"{}\n"
+"Hãy xóa những tập tin này khỏi thư mục, rồi thử lại."
+
+#: lib50/_api.py:1097
+#, python-brace-format
+msgid ""
+"These files are too large to be submitted:\n"
+"{}\n"
+"Install git-lfs (or remove these files from your directory) and then re-"
+"run!"
+msgstr ""
+"Những tập tin này quá lớn để nộp:\n"
+"{}\n"
+"Vui lòng cài đặt git-lfs (hay xoá những tập tin này khỏi thư mục), rồi thử lại."
+
+#: lib50/_errors.py:54
+msgid "You seem to be missing these required files:"
+msgstr "Bạn thiếu những tập tin bắt buộc này:"
+
+#: lib50/_errors.py:56 lib50/_errors.py:76
+#, python-brace-format
+msgid "You are currently in: {}, did you perhaps intend another directory?"
+msgstr "Bạn đang ở: {}, có lẽ bạn muốn chuyển đến thư mục khác phải không?"
+
+#: lib50/_errors.py:75
+#, python-brace-format
+msgid "Looks like you are in a directory with too many (> {}) files."
+msgstr "Bạn đang ở trong một thư mục có quá nhiều tập tin (> {})."
+
+#: lib50/authentication.py:54
+msgid "Authenticating"
+msgstr "Đang xác nhận"
+
+#: lib50/authentication.py:110
+msgid ""
+"Looks like you're trying to push to a branch that conflicts with an "
+"existing one in the repository.\n"
+msgstr ""
+
+#: lib50/authentication.py:115
+msgid "You are trying to push to a branch that is not allowed.\n"
+msgstr ""
+
+#: lib50/authentication.py:265
+msgid "Enter username for GitHub: "
+msgstr "Nhập username cho GitHub: "
+
+#: lib50/authentication.py:272
+msgid "Enter personal access token for GitHub: "
+msgstr "Nhập mã truy cập cá nhân cho GitHub: "
+
+#: lib50/authentication.py:291
+msgid ""
+"You might be using your GitHub password to log in, but that's no longer "
+"possible. But you can still use check50 and submit50! See "
+"https://cs50.readthedocs.io/github for instructions."
+msgstr ""
+"Bạn có thể đang sử dụng mật khẩu GitHub để đăng nhập, nhưng phương pháp này không còn khả thi nữa."
+"Tuy nhiên, bạn vẫn có thể sử dụng check50 và submit50. Xem "
+"https://cs50.readthedocs.io/github để biết hướng dẫn."
+
+#: lib50/config.py:50
+#, python-brace-format
+msgid "Two config files (.cs50.yaml and .cs50.yml) found at {}"
+msgstr "Hai tập tin cấu hình (.cs50.yaml và .cs50.yml) được tìm thấy tại {}"
+
+#: lib50/config.py:53
+#, python-brace-format
+msgid "No config file (.cs50.yaml or .cs50.yml) found at {}"
+msgstr "Không tìm thấy tập tin cấu hình (.cs50.yaml hoặc .cs50.yml) tại {}"
+
+#: lib50/config.py:192
+msgid "Config is not valid yaml."
+msgstr "Cấu hình yaml không hợp lệ."
+
+#: lib50/config.py:274
+#, python-brace-format
+msgid "{} is not a valid tag for {}"
+msgstr "{} không phải là tag hợp lệ cho {}"
+
