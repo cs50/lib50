@@ -1049,16 +1049,22 @@ def get_content(org, repo, branch, filepath):
     r = _make_request(url)
     
     if r.ok:
+        logger.debug(f"Successfully fetched {url}")
         return r.content
+    else:
+        logger.debug(f"Failed to fetch {url}: {r.status_code} {r.reason}")
     
     if r.status_code == 404:
         # Try fallback URL in case there were issues with github.com's redirect
         fallback_url = "https://raw.githubusercontent.com/{}/{}/{}/{}".format(org, repo, branch, filepath)
+        logger.debug(f"Attempting fallback URL for {fallback_url}")
         r = _make_request(fallback_url)
         
         if r.ok:
+            logger.debug(f"Successfully fetched {fallback_url}")
             return r.content
         elif r.status_code == 404:
+            logger.debug(f"Failed to fetch {fallback_url}: {r.status_code} {r.reason}")
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
         else:
             _handle_non_404_error()
