@@ -1024,23 +1024,46 @@ def _match_files(universe, pattern):
 
 def get_content(org, repo, branch, filepath):
     """Get all content from org/repo/branch/filepath at GitHub."""
-    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
-    try:
-        r = requests.get(url)
-        if not r.ok:
-            if r.status_code == 404:
-                raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
-            else:
-                # Check if GitHub outage may be the source of the issue
-                check_github_status()
-
-                # Otherwise raise a ConnectionError
-                raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
-
-    except requests.exceptions.SSLError as e:
+    
+    def _handle_ssl_error(e):
+        """Handle SSL errors consistently."""
         raise ConnectionError(_(f"Could not connect to GitHub due to a SSL error.\nPlease check GitHub's status at githubstatus.com.\nError: {e}"))
+    
+    def _handle_non_404_error():
+        """Handle non-404 HTTP errors consistently."""
 
-    return r.content
+        # Check if GitHub outage may be the source of the issue
+        check_github_status()
+        
+        # Otherwise raise a ConnectionError
+        raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
+    
+    def _make_request(url):
+        """Make a request and handle SSL errors."""
+        try:
+            return requests.get(url)
+        except requests.exceptions.SSLError as e:
+            _handle_ssl_error(e)
+    
+    url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
+    r = _make_request(url)
+    
+    if r.ok:
+        return r.content
+    
+    if r.status_code == 404:
+        # Try fallback URL in case there were issues with github.com's redirect
+        fallback_url = "https://raw.githubusercontent.com/{}/{}/{}/{}".format(org, repo, branch, filepath)
+        r = _make_request(fallback_url)
+        
+        if r.ok:
+            return r.content
+        elif r.status_code == 404:
+            raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
+        else:
+            _handle_non_404_error()
+    else:
+        _handle_non_404_error()
 
 
 def check_github_status():
