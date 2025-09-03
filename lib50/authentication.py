@@ -1,5 +1,5 @@
-import attr
 import contextlib
+import dataclasses
 import enum
 import os
 import pexpect
@@ -20,16 +20,18 @@ __all__ = ["User", "authenticate", "logout"]
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
-@attr.s(slots=True)
+@dataclasses.dataclass(slots=True)
 class User:
     """An authenticated GitHub user that has write access to org/repo."""
-    name = attr.ib()
-    repo = attr.ib()
-    org = attr.ib()
-    passphrase = attr.ib(default=str)
-    email = attr.ib(default=attr.Factory(lambda self: f"{self.name}@users.noreply.github.com",
-                                         takes_self=True),
-                    init=False)
+    name: str
+    repo: str
+    org: str
+    passphrase: str = ""
+    email: str = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        self.email = f"{self.name}@users.noreply.github.com"
+
 
 @contextlib.contextmanager
 def authenticate(org, repo=None, auth_method=None):
