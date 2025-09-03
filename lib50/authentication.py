@@ -20,7 +20,7 @@ __all__ = ["User", "authenticate", "logout"]
 _CREDENTIAL_SOCKET = Path("~/.git-credential-cache/lib50").expanduser()
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass
 class User:
     """An authenticated GitHub user that has write access to org/repo."""
     name: str
