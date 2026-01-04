@@ -24,7 +24,7 @@ setup(
     },
     keywords=["lib50"],
     name="lib50",
-    python_requires=">= 3.8",
+    python_requires=">= 3.10",
     packages=["lib50"],
     url="https://github.com/cs50/lib50",
     version="3.1.4",
