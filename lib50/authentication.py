@@ -260,6 +260,9 @@ def _authenticate_https(org, repo=None):
             print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
             logout()
             sys.exit(1)
+        except ConnectionError:
+            # If we can't reach GitHub to validate, proceed anyway and let it fail later if needed
+            pass
 
     # Otherwise, get credentials from cache if possible
     if username is None or password is None:
