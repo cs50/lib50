@@ -4,6 +4,7 @@ import enum
 import os
 import pexpect
 import re
+import requests
 import sys
 import termcolor
 import termios
@@ -13,7 +14,7 @@ from pathlib import Path
 
 from . import _
 from . import _api as api
-from ._errors import ConnectionError, InvalidBranchError, RejectedHonestyPromptError
+from ._errors import ConnectionError, InvalidBranchError, InvalidTokenError, RejectedHonestyPromptError
 
 __all__ = ["User", "authenticate", "logout"]
 
@@ -249,6 +250,16 @@ def _authenticate_https(org, repo=None):
             print(termcolor.colored(prompt, color="yellow", attrs=["bold"]))
             logout()
             sys.exit(1)
+        
+        # Validate that the token is actually working
+        try:
+            _validate_github_token(password)
+        except InvalidTokenError:
+            msg = _("There seems to be an issue authenticating with your GitHub token."\
+                " Please visit https://cs50.dev/restart to restart your codespace and try again.")
+            print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
+            logout()
+            sys.exit(1)
 
     # Otherwise, get credentials from cache if possible
     if username is None or password is None:
@@ -329,6 +340,30 @@ def _show_gh_changes_warning():
                         " See https://cs50.readthedocs.io/github for instructions if you haven't already!"
         print(termcolor.colored(warning, color="yellow", attrs=["bold"]))
     _show_gh_changes_warning.showed = True
+
+
+def _validate_github_token(token):
+    """Validate a GitHub token by making an authenticated request to the GitHub API."""
+    try:
+        response = requests.get(
+            "https://api.github.com/user",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "X-GitHub-Api-Version": "2022-11-28"
+            },
+            timeout=10
+        )
+
+        if response.status_code in (401, 403):
+            raise InvalidTokenError()
+        elif not response.ok:
+            raise ConnectionError(f"Could not validate GitHub token. Received status code: {response.status_code}")
+
+    except requests.exceptions.Timeout:
+        raise ConnectionError("Connection to GitHub timed out while validating token.")
+    except requests.exceptions.RequestException as e:
+        raise ConnectionError(f"Could not connect to GitHub to validate token: {e}")
 
 
 def _prompt_username(prompt="Username: "):

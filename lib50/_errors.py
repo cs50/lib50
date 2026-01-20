@@ -11,7 +11,8 @@ __all__ = [
     "MissingToolError",
     "TimeoutError",
     "ConnectionError",
-    "RejectedHonestyPromptError"
+    "RejectedHonestyPromptError",
+    "InvalidTokenError"
 ]
 
 
@@ -110,4 +111,9 @@ class InvalidSignatureError(Error):
 
 class RejectedHonestyPromptError(Error):
     """A ``lib50.Error`` signalling the honesty prompt was rejected by the user."""
+    pass
+
+
+class InvalidTokenError(Error):
+    """A ``lib50.Error`` signalling that the GitHub token is invalid or expired."""
     pass
