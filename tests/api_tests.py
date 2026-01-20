@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 import os
 import sys
 import contextlib
@@ -11,9 +12,11 @@ import subprocess
 import time
 import termcolor
 import pexpect
+import requests
 
 import lib50._api
 import lib50.authentication
+import lib50._errors
 
 class TestGit(unittest.TestCase):
     def setUp(self):
@@ -234,6 +237,54 @@ class TestPromptPassword(unittest.TestCase):
 
         self.assertEqual(password, "♣€")
         self.assertEqual(resolve_backspaces(f.getvalue()).count("*"), 2)
+
+
+class TestValidateGitHubToken(unittest.TestCase):
+    def test_valid_token(self):
+        """Test that a valid token (200 response) does not raise an exception."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.ok = True
+            # Should not raise
+            lib50.authentication._validate_github_token("valid_token")
+
+    def test_invalid_token_401(self):
+        """Test that a 401 response raises InvalidTokenError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 401
+            mock_get.return_value.ok = False
+            with self.assertRaises(lib50._errors.InvalidTokenError):
+                lib50.authentication._validate_github_token("invalid_token")
+
+    def test_forbidden_token_403(self):
+        """Test that a 403 response raises InvalidTokenError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            with self.assertRaises(lib50._errors.InvalidTokenError):
+                lib50.authentication._validate_github_token("forbidden_token")
+
+    def test_other_http_error(self):
+        """Test that other HTTP errors (e.g., 500) raise ConnectionError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 500
+            mock_get.return_value.ok = False
+            with self.assertRaises(lib50._errors.ConnectionError):
+                lib50.authentication._validate_github_token("some_token")
+
+    def test_timeout(self):
+        """Test that a timeout raises ConnectionError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.side_effect = requests.exceptions.Timeout()
+            with self.assertRaises(lib50._errors.ConnectionError):
+                lib50.authentication._validate_github_token("some_token")
+
+    def test_request_exception(self):
+        """Test that a request exception raises ConnectionError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.side_effect = requests.exceptions.RequestException("Network error")
+            with self.assertRaises(lib50._errors.ConnectionError):
+                lib50.authentication._validate_github_token("some_token")
 
 
 class TestGetLocalSlugs(unittest.TestCase):
