@@ -257,12 +257,84 @@ class TestValidateGitHubToken(unittest.TestCase):
                 lib50.authentication._validate_github_token("invalid_token")
 
     def test_forbidden_token_403(self):
-        """Test that a 403 response raises InvalidTokenError."""
+        """Test that a 403 response with rate limit remaining raises InvalidTokenError."""
         with mock.patch("lib50.authentication.requests.get") as mock_get:
             mock_get.return_value.status_code = 403
             mock_get.return_value.ok = False
+            mock_get.return_value.headers = {"x-ratelimit-remaining": "4980"}
             with self.assertRaises(lib50._errors.InvalidTokenError):
                 lib50.authentication._validate_github_token("forbidden_token")
+
+    def test_rate_limited_403(self):
+        """Test that a 403 response with an exhausted rate limit raises RateLimitError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            mock_get.return_value.headers = {
+                "x-ratelimit-remaining": "0",
+                "x-ratelimit-reset": "1700000000"
+            }
+            mock_get.return_value.json.return_value = {}
+            with self.assertRaises(lib50._errors.RateLimitError):
+                lib50.authentication._validate_github_token("valid_but_throttled_token")
+
+    def test_rate_limit_error_carries_identity(self):
+        """Test that the account id and request id are captured for support.
+
+        Students report these failures by screenshot, so the message has to identify them
+        without a follow-up question.
+        """
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            mock_get.return_value.headers = {
+                "x-ratelimit-remaining": "0",
+                "x-github-request-id": "ABC1:2DEF:34567:89ABC:DEF012"
+            }
+            mock_get.return_value.json.return_value = {
+                "message": "API rate limit exceeded for user ID 123456789."
+            }
+            with self.assertRaises(lib50._errors.RateLimitError) as cm:
+                lib50.authentication._validate_github_token("valid_but_throttled_token")
+            self.assertEqual(cm.exception.payload["user_id"], "123456789")
+            self.assertEqual(cm.exception.payload["request_id"], "ABC1:2DEF:34567:89ABC:DEF012")
+
+    def test_identify_reports_user_and_id(self):
+        """Test that _identify() names the student, and stays quiet when it cannot."""
+        with mock.patch.dict(os.environ, {"CS50_GH_USER": "student50",
+                                          "RepositoryName": "123456789"}, clear=False):
+            details = lib50.authentication._identify(request_id="REQ123")
+            self.assertIn("user student50", details)
+            self.assertIn("id 123456789", details)
+            self.assertIn("request REQ123", details)
+
+        # Outside a codespace the workspace name is not a numeric id, so omit it
+        with mock.patch.dict(os.environ, {"CS50_GH_USER": "student50",
+                                          "RepositoryName": "myproject"}, clear=False):
+            self.assertNotIn("id ", lib50.authentication._identify())
+
+    def test_identify_is_empty_without_context(self):
+        """Test that _identify() adds nothing rather than a bare 'Details:' line."""
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(lib50.authentication._identify(), "")
+
+    def test_secondary_rate_limited_403(self):
+        """Test that a 403 response with retry-after raises RateLimitError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            mock_get.return_value.headers = {"retry-after": "60", "x-ratelimit-remaining": "42"}
+            mock_get.return_value.json.return_value = {}
+            with self.assertRaises(lib50._errors.RateLimitError):
+                lib50.authentication._validate_github_token("valid_but_throttled_token")
+
+    def test_rate_limit_error_reports_reset_time(self):
+        """Test that RateLimitError tells the user when to retry, and copes without a reset."""
+        error = lib50._errors.RateLimitError(reset="1700000000")
+        self.assertIn("try again after", str(error))
+        self.assertEqual(error.payload["reset"], "1700000000")
+        self.assertIn("rate limit", str(lib50._errors.RateLimitError()))
+        self.assertIn("rate limit", str(lib50._errors.RateLimitError(reset="not-a-timestamp")))
 
     def test_other_http_error(self):
         """Test that other HTTP errors (e.g., 500) raise ConnectionError."""
