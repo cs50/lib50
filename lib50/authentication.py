@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import _
 from . import _api as api
-from ._errors import ConnectionError, InvalidBranchError, InvalidTokenError, RejectedHonestyPromptError
+from ._errors import ConnectionError, InvalidBranchError, InvalidTokenError, RateLimitError, RejectedHonestyPromptError
 
 __all__ = ["User", "authenticate", "logout"]
 
@@ -254,6 +254,11 @@ def _authenticate_https(org, repo=None):
         # Validate that the token is actually working
         try:
             _validate_github_token(password)
+        except RateLimitError as e:
+            # The token is valid, so keep the cached credentials: restarting cannot help and
+            # logout() would discard a working credential.
+            print(termcolor.colored(str(e), color="yellow", attrs=["bold"]))
+            sys.exit(1)
         except InvalidTokenError:
             msg = _("There seems to be an issue authenticating with your GitHub token."\
                 " Please visit https://cs50.dev/restart to restart your codespace and try again.")
@@ -346,7 +351,12 @@ def _show_gh_changes_warning():
 
 
 def _validate_github_token(token):
-    """Validate a GitHub token by making an authenticated request to the GitHub API."""
+    """Validate a GitHub token by making an authenticated request to the GitHub API.
+
+    Raises RateLimitError when the token is valid but the account's hourly budget is spent.
+    GitHub reports both as 403, so they are told apart by the rate-limit headers; conflating
+    them tells students to restart their codespace when only waiting helps.
+    """
     try:
         response = requests.get(
             "https://api.github.com/user",
@@ -358,7 +368,11 @@ def _validate_github_token(token):
             timeout=10
         )
 
-        if response.status_code in (401, 403):
+        if response.status_code == 403 and (
+                response.headers.get("x-ratelimit-remaining") == "0"
+                or response.headers.get("retry-after")):
+            raise RateLimitError(reset=response.headers.get("x-ratelimit-reset"))
+        elif response.status_code in (401, 403):
             raise InvalidTokenError()
         elif not response.ok:
             raise ConnectionError(f"Could not validate GitHub token. Received status code: {response.status_code}")

@@ -257,12 +257,42 @@ class TestValidateGitHubToken(unittest.TestCase):
                 lib50.authentication._validate_github_token("invalid_token")
 
     def test_forbidden_token_403(self):
-        """Test that a 403 response raises InvalidTokenError."""
+        """Test that a 403 response with rate limit remaining raises InvalidTokenError."""
         with mock.patch("lib50.authentication.requests.get") as mock_get:
             mock_get.return_value.status_code = 403
             mock_get.return_value.ok = False
+            mock_get.return_value.headers = {"x-ratelimit-remaining": "4980"}
             with self.assertRaises(lib50._errors.InvalidTokenError):
                 lib50.authentication._validate_github_token("forbidden_token")
+
+    def test_rate_limited_403(self):
+        """Test that a 403 response with an exhausted rate limit raises RateLimitError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            mock_get.return_value.headers = {
+                "x-ratelimit-remaining": "0",
+                "x-ratelimit-reset": "1700000000"
+            }
+            with self.assertRaises(lib50._errors.RateLimitError):
+                lib50.authentication._validate_github_token("valid_but_throttled_token")
+
+    def test_secondary_rate_limited_403(self):
+        """Test that a 403 response with retry-after raises RateLimitError."""
+        with mock.patch("lib50.authentication.requests.get") as mock_get:
+            mock_get.return_value.status_code = 403
+            mock_get.return_value.ok = False
+            mock_get.return_value.headers = {"retry-after": "60", "x-ratelimit-remaining": "42"}
+            with self.assertRaises(lib50._errors.RateLimitError):
+                lib50.authentication._validate_github_token("valid_but_throttled_token")
+
+    def test_rate_limit_error_reports_reset_time(self):
+        """Test that RateLimitError tells the user when to retry, and copes without a reset."""
+        error = lib50._errors.RateLimitError(reset="1700000000")
+        self.assertIn("try again after", str(error))
+        self.assertEqual(error.payload["reset"], "1700000000")
+        self.assertIn("rate limit", str(lib50._errors.RateLimitError()))
+        self.assertIn("rate limit", str(lib50._errors.RateLimitError(reset="not-a-timestamp")))
 
     def test_other_http_error(self):
         """Test that other HTTP errors (e.g., 500) raise ConnectionError."""
