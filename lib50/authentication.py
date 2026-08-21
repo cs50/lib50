@@ -257,12 +257,14 @@ def _authenticate_https(org, repo=None):
         except RateLimitError as e:
             # The token is valid, so keep the cached credentials: restarting cannot help and
             # logout() would discard a working credential.
-            print(termcolor.colored(str(e), color="yellow", attrs=["bold"]))
+            msg = str(e) + _identify(user_id=e.payload.get("user_id"),
+                                     request_id=e.payload.get("request_id"))
+            print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
             sys.exit(1)
         except InvalidTokenError:
             msg = _("There seems to be an issue authenticating with your GitHub token."\
                 " Please visit https://cs50.dev/restart to restart your codespace and try again.")
-            print(termcolor.colored(msg, color="yellow", attrs=["bold"]))
+            print(termcolor.colored(msg + _identify(), color="yellow", attrs=["bold"]))
             logout()
             sys.exit(1)
         except ConnectionError:
@@ -350,6 +352,41 @@ def _show_gh_changes_warning():
     _show_gh_changes_warning.showed = True
 
 
+def _identify(user_id=None, request_id=None):
+    """Render who this codespace is authenticated as, to append to an error message.
+
+    Students report these failures by screenshotting the terminal, so the message itself has
+    to carry enough to find them in our logs without a follow-up question. The GitHub login
+    matches the user context we attach to Sentry events.
+    """
+
+    # In a CS50 codespace the workspace directory is the student's numeric GitHub id
+    if user_id is None and os.environ.get("RepositoryName", "").isdigit():
+        user_id = os.environ["RepositoryName"]
+
+    details = []
+    if username := os.environ.get("CS50_GH_USER"):
+        details.append(f"user {username}")
+    if user_id:
+        details.append(f"id {user_id}")
+    if request_id:
+        details.append(f"request {request_id}")
+    return "\n" + _("Details: {}").format(", ".join(details)) if details else ""
+
+
+def _github_user_id(response):
+    """The numeric account id GitHub names in a rate-limit message, if present.
+
+    GitHub answers an exhausted budget with "API rate limit exceeded for user ID 12345", which
+    is the only place the id is available on a failed request.
+    """
+    try:
+        match = re.search(r"for user ID (\d+)", response.json().get("message", ""))
+    except (AttributeError, ValueError):
+        return None
+    return match.group(1) if match else None
+
+
 def _validate_github_token(token):
     """Validate a GitHub token by making an authenticated request to the GitHub API.
 
@@ -371,7 +408,9 @@ def _validate_github_token(token):
         if response.status_code == 403 and (
                 response.headers.get("x-ratelimit-remaining") == "0"
                 or response.headers.get("retry-after")):
-            raise RateLimitError(reset=response.headers.get("x-ratelimit-reset"))
+            raise RateLimitError(reset=response.headers.get("x-ratelimit-reset"),
+                                 user_id=_github_user_id(response),
+                                 request_id=response.headers.get("x-github-request-id"))
         elif response.status_code in (401, 403):
             raise InvalidTokenError()
         elif not response.ok:
