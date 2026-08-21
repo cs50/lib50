@@ -1,3 +1,4 @@
+import datetime
 import os
 from . import _
 
@@ -12,7 +13,8 @@ __all__ = [
     "TimeoutError",
     "ConnectionError",
     "RejectedHonestyPromptError",
-    "InvalidTokenError"
+    "InvalidTokenError",
+    "RateLimitError"
 ]
 
 
@@ -117,3 +119,26 @@ class RejectedHonestyPromptError(Error):
 class InvalidTokenError(Error):
     """A ``lib50.Error`` signalling that the GitHub token is invalid or expired."""
     pass
+
+
+class RateLimitError(Error):
+    """
+    A ``lib50.Error`` signalling the GitHub API rate limit is exhausted.
+    Unlike ``InvalidTokenError`` the token is valid, so the remedy is to wait, not to
+    re-authenticate.
+    ``RateLimitError.payload["reset"]`` is the UNIX timestamp when the budget resets, if known.
+    ``RateLimitError.payload["user_id"]`` and ``["request_id"]`` identify the account and the
+    GitHub request, when GitHub reported them.
+    """
+
+    def __init__(self, reset=None, user_id=None, request_id=None):
+        message = _("You have reached GitHub's hourly API rate limit.")
+        if reset:
+            try:
+                when = datetime.datetime.fromtimestamp(int(reset)).strftime("%H:%M")
+                message = _("You have reached GitHub's hourly API rate limit."
+                            " Please try again after {}.").format(when)
+            except (TypeError, ValueError):
+                pass
+        super().__init__(message)
+        self.payload.update(reset=reset, user_id=user_id, request_id=request_id)
