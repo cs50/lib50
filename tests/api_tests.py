@@ -379,9 +379,37 @@ class TestGetLocalSlugs(unittest.TestCase):
         self.temp_dir.cleanup()
         lib50.set_local_path(self.old_path)
 
+    def _add_problem(self, *parts):
+        """Create another problem dir (with a foo50 config) in the existing repo."""
+        path = lib50.get_local_path() / "foo" / "bar" / pathlib.Path(*parts)
+        os.makedirs(path)
+        with open(path / ".cs50.yml", "w") as f:
+            f.write("foo50: true\n")
+
     def test_one_local_slug(self):
         slugs = list(lib50.get_local_slugs("foo50"))
         self.assertEqual(len(slugs), 1)
+        self.assertEqual(slugs[0], "foo/bar/main/baz")
+
+    def test_similar_to_exact_match(self):
+        slugs = list(lib50.get_local_slugs("foo50", similar_to="foo/bar/main/baz"))
+        self.assertEqual(slugs, ["foo/bar/main/baz"])
+
+    def test_similar_to_ranks_by_similarity(self):
+        self._add_problem("qux")
+        self._add_problem("quux")
+
+        slugs = list(lib50.get_local_slugs("foo50", similar_to="foo/bar/main/bazz"))
+
+        self.assertEqual(len(slugs), 3)
+        self.assertEqual(slugs[0], "foo/bar/main/baz")
+        self.assertEqual(sorted(slugs[1:]), ["foo/bar/main/quux", "foo/bar/main/qux"])
+
+    def test_similar_to_typo(self):
+        self._add_problem("qux")
+
+        slugs = list(lib50.get_local_slugs("foo50", similar_to="foo/bar/main/bza"))
+
         self.assertEqual(slugs[0], "foo/bar/main/baz")
 
 

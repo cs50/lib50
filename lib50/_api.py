@@ -655,7 +655,7 @@ def _rank_similar_slugs(target_slug, other_slugs):
 
     scores = {}
     for other_slug in other_slugs:
-        scores[other_slug] = jellyfish.jaro_winkler(target_slug, other_slug)
+        scores[other_slug] = jellyfish.jaro_winkler_similarity(target_slug, other_slug)
 
     return sorted(scores, key=lambda k: scores[k], reverse=True)
 
