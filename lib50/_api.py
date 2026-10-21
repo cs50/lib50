@@ -521,7 +521,18 @@ def upload(branch, user, tool, data):
         # Commit + push
         git = Git().set(Git.working_area)
         run(git("commit -m {msg} --allow-empty", msg=commit_message))
-        run_authenticated(user, git.set(Git.cache)("push origin {branch}", branch=branch))
+
+        # Push git-lfs objects explicitly to show progress bar if LFS is used
+        if shutil.which("git-lfs"):
+            has_lfs = run(git("lfs ls-files")).strip()
+            if has_lfs:
+                run_authenticated(user, git.set(Git.cache)("lfs push origin {branch}", branch=branch))
+                run_authenticated(user, git.set(Git.cache)("push --no-verify origin {branch}", branch=branch))
+            else:
+                run_authenticated(user, git.set(Git.cache)("push origin {branch}", branch=branch))
+        else:
+            run_authenticated(user, git.set(Git.cache)("push origin {branch}", branch=branch))
+
         commit_hash = run(git("rev-parse HEAD"))
         return user.name, commit_hash
 
