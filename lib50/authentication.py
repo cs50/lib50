@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import _
 from . import _api as api
-from ._errors import ConnectionError, InvalidBranchError, InvalidTokenError, RateLimitError, RejectedHonestyPromptError
+from ._errors import ConnectionError, InvalidBranchError, InvalidTokenError, RateLimitError, RejectedHonestyPromptError, TimeoutError
 
 __all__ = ["User", "authenticate", "logout"]
 
@@ -98,7 +98,12 @@ def logout():
 
 
 def run_authenticated(user, command, quiet=False, timeout=None):
-    """Run a command as a authenticated user. Returns command output."""
+    """
+    Run a command as a authenticated user. Returns command output.
+
+    ``timeout`` is passed to ``lib50._api.spawn``: seconds the command may go without output,
+    ``None`` for ``lib50._api.COMMAND_TIMEOUT``.
+    """
     try:
         with api.spawn(command, quiet, timeout) as child:
             match = child.expect([
@@ -142,7 +147,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
 
     except pexpect.TIMEOUT:
         api.logger.info(f"command {command} timed out")
-        raise TimeoutError(timeout)
+        raise TimeoutError(child.timeout)
 
     return command_output
 

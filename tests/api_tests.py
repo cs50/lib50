@@ -359,6 +359,113 @@ class TestValidateGitHubToken(unittest.TestCase):
                 lib50.authentication._validate_github_token("some_token")
 
 
+class TestNetworkTimeouts(unittest.TestCase):
+    """
+    Every network call lib50 makes must give up eventually. Without a timeout, a connection that a
+    GitHub outage has left half-open never returns, and a web application that embeds lib50 holds a
+    worker until the server is restarted.
+    """
+
+    def test_get_content_passes_timeout(self):
+        with mock.patch("lib50._api.requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.content = b"foo"
+            self.assertEqual(lib50._api.get_content("cs50", "lib50", "main", "bar/.cs50.yml"), b"foo")
+            self.assertEqual(mock_get.call_args.kwargs["timeout"], (lib50._api.CONNECT_TIMEOUT, lib50._api.READ_TIMEOUT))
+
+    def test_get_content_timeout_is_connection_error(self):
+        with mock.patch("lib50._api.requests.get", side_effect=requests.exceptions.ConnectTimeout()), \
+             mock.patch("lib50._api.check_github_status"):
+            with self.assertRaises(lib50._errors.ConnectionError):
+                lib50._api.get_content("cs50", "lib50", "main", "bar/.cs50.yml")
+
+    def test_get_content_ssl_error_still_reported_as_such(self):
+        with mock.patch("lib50._api.requests.get", side_effect=requests.exceptions.SSLError("bad cert")):
+            with self.assertRaises(lib50._errors.ConnectionError) as cm:
+                lib50._api.get_content("cs50", "lib50", "main", "bar/.cs50.yml")
+            self.assertIn("SSL", str(cm.exception))
+
+    def test_check_github_status_passes_timeout(self):
+        with mock.patch("lib50._api.requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"components": []}
+            lib50._api.check_github_status()
+            self.assertEqual(mock_get.call_args.kwargs["timeout"], (lib50._api.CONNECT_TIMEOUT, lib50._api.READ_TIMEOUT))
+
+    def test_check_github_status_timeout_is_connection_error(self):
+        with mock.patch("lib50._api.requests.get", side_effect=requests.exceptions.ReadTimeout()):
+            with self.assertRaises(lib50._errors.ConnectionError):
+                lib50._api.check_github_status()
+
+    def test_check_github_status_ignores_unrelated_components(self):
+        # An incident in a component lib50 does not use must not be reported as "could not connect to GitHub"
+        with mock.patch("lib50._api.requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"components": [
+                {"name": "Pull Requests", "status": "major_outage"},
+                {"name": "Actions", "status": "partial_outage"},
+                {"name": "Git Operations", "status": "operational"},
+                {"name": "API Requests", "status": "operational"},
+            ]}
+            lib50._api.check_github_status()
+
+    def test_check_github_status_reports_relevant_component(self):
+        with mock.patch("lib50._api.requests.get") as mock_get:
+            mock_get.return_value.ok = True
+            mock_get.return_value.json.return_value = {"components": [
+                {"name": "Pull Requests", "status": "operational"},
+                {"name": "Git Operations", "status": "degraded_performance"},
+            ]}
+            with self.assertRaises(lib50._errors.ConnectionError) as cm:
+                lib50._api.check_github_status()
+            self.assertIn("Git Operations", str(cm.exception))
+
+
+class TestCommandTimeouts(unittest.TestCase):
+    """spawn() and run() must not wait forever on a command that goes silent, and must kill it when they give up."""
+
+    def test_run_times_out_and_kills(self):
+        start = time.time()
+        with self.assertRaises(lib50._errors.TimeoutError) as cm:
+            lib50._api.run("sleep 30", timeout=0.5)
+        self.assertLess(time.time() - start, 5)
+        self.assertEqual(cm.exception.args, (0.5,))
+
+    def test_spawn_exit_times_out_and_kills(self):
+        # The command is still running when the context exits, so spawn's own wait for EOF is what expires
+        with self.assertRaises(lib50._errors.TimeoutError):
+            with lib50._api.spawn("sleep 30", quiet=True, timeout=0.5) as child:
+                pass
+        self.assertFalse(child.isalive())
+
+    def test_default_is_command_timeout(self):
+        with mock.patch.object(lib50._api, "COMMAND_TIMEOUT", 0.5):
+            with self.assertRaises(lib50._errors.TimeoutError) as cm:
+                lib50._api.run("sleep 30")
+        self.assertEqual(cm.exception.args, (0.5,))
+
+    def test_run_authenticated_default_is_command_timeout(self):
+        user = lib50.authentication.User(name="foo", repo="bar", org="baz")
+        with mock.patch.object(lib50._api, "COMMAND_TIMEOUT", 0.5):
+            with self.assertRaises(lib50._errors.TimeoutError) as cm:
+                lib50.authentication.run_authenticated(user, "sleep 30")
+        self.assertEqual(cm.exception.args, (0.5,))
+
+    def test_timeout_is_idle_not_total(self):
+        # Runs for ~2.4s, far past the 0.5s timeout, but never goes silent for that long: like a large
+        # git transfer printing progress, it must be allowed to finish
+        command = "sh -c 'for i in 1 2 3 4 5 6 7 8; do echo $i; sleep 0.3; done'"
+        self.assertEqual(lib50._api.run(command, timeout=0.5), "1\n2\n3\n4\n5\n6\n7\n8")
+
+    def test_pattern_found_after_idle_windows(self):
+        # A pattern that only appears after several timeout windows' worth of output is still matched,
+        # with everything before it intact and the rest still readable
+        with lib50._api.spawn("sh -c 'echo a; sleep 0.3; echo b; sleep 0.3; echo READY; echo tail'", quiet=True, timeout=0.5) as child:
+            self.assertEqual(child.expect(["READY", pexpect.EOF]), 0)
+            self.assertEqual(child.before.replace("\r\n", "\n").strip(), "a\nb")
+            self.assertEqual(child.read().strip(), "tail")
+
+
 class TestGetLocalSlugs(unittest.TestCase):
     def setUp(self):
         self.old_path = lib50.get_local_path()
