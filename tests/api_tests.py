@@ -360,12 +360,6 @@ class TestValidateGitHubToken(unittest.TestCase):
 
 
 class TestNetworkTimeouts(unittest.TestCase):
-    """
-    Every network call lib50 makes must give up eventually. Without a timeout, a connection that a
-    GitHub outage has left half-open never returns, and a web application that embeds lib50 holds a
-    worker until the server is restarted.
-    """
-
     def test_get_content_passes_timeout(self):
         with mock.patch("lib50._api.requests.get") as mock_get:
             mock_get.return_value.ok = True
@@ -398,7 +392,6 @@ class TestNetworkTimeouts(unittest.TestCase):
                 lib50._api.check_github_status()
 
     def test_check_github_status_ignores_unrelated_components(self):
-        # An incident in a component lib50 does not use must not be reported as "could not connect to GitHub"
         with mock.patch("lib50._api.requests.get") as mock_get:
             mock_get.return_value.ok = True
             mock_get.return_value.json.return_value = {"components": [
@@ -422,44 +415,51 @@ class TestNetworkTimeouts(unittest.TestCase):
 
 
 class TestCommandTimeouts(unittest.TestCase):
-    """spawn() and run() must not wait forever on a command that goes silent, and must kill it when they give up."""
-
     def test_run_times_out_and_kills(self):
+        pids = []
+        original_init = lib50._api._IdleTimeoutSpawn.__init__
+
+        def record_pid(child, *args, **kwargs):
+            original_init(child, *args, **kwargs)
+            pids.append(child.pid)
+
         start = time.time()
-        with self.assertRaises(lib50._errors.TimeoutError) as cm:
-            lib50._api.run("sleep 30", timeout=0.5)
+        with mock.patch.object(lib50._api._IdleTimeoutSpawn, "__init__", record_pid):
+            with self.assertRaises(lib50._errors.TimeoutError) as cm:
+                lib50._api.run("sleep 30", timeout=0.5)
         self.assertLess(time.time() - start, 5)
         self.assertEqual(cm.exception.args, (0.5,))
+        self.assertEqual(len(pids), 1)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pids[0], 0)
 
     def test_spawn_exit_times_out_and_kills(self):
-        # The command is still running when the context exits, so spawn's own wait for EOF is what expires
         with self.assertRaises(lib50._errors.TimeoutError):
             with lib50._api.spawn("sleep 30", quiet=True, timeout=0.5) as child:
                 pass
         self.assertFalse(child.isalive())
 
     def test_default_is_command_timeout(self):
-        with mock.patch.object(lib50._api, "COMMAND_TIMEOUT", 0.5):
+        with mock.patch.object(lib50._api, "COMMAND_IDLE_TIMEOUT", 0.5):
             with self.assertRaises(lib50._errors.TimeoutError) as cm:
                 lib50._api.run("sleep 30")
         self.assertEqual(cm.exception.args, (0.5,))
 
     def test_run_authenticated_default_is_command_timeout(self):
         user = lib50.authentication.User(name="foo", repo="bar", org="baz")
-        with mock.patch.object(lib50._api, "COMMAND_TIMEOUT", 0.5):
+        with mock.patch.object(lib50._api, "COMMAND_IDLE_TIMEOUT", 0.5):
             with self.assertRaises(lib50._errors.TimeoutError) as cm:
                 lib50.authentication.run_authenticated(user, "sleep 30")
         self.assertEqual(cm.exception.args, (0.5,))
 
     def test_timeout_is_idle_not_total(self):
-        # Runs for ~2.4s, far past the 0.5s timeout, but never goes silent for that long: like a large
-        # git transfer printing progress, it must be allowed to finish
-        command = "sh -c 'for i in 1 2 3 4 5 6 7 8; do echo $i; sleep 0.3; done'"
-        self.assertEqual(lib50._api.run(command, timeout=0.5), "1\n2\n3\n4\n5\n6\n7\n8")
+        timeout, interval, count = 0.5, 0.3, 4
+        self.assertLess(interval, timeout)
+        self.assertGreater(count * interval, timeout)
+        command = f"sh -c 'for i in $(seq {count}); do echo $i; sleep {interval}; done'"
+        self.assertEqual(lib50._api.run(command, timeout=timeout), "\n".join(str(i) for i in range(1, count + 1)))
 
     def test_pattern_found_after_idle_windows(self):
-        # A pattern that only appears after several timeout windows' worth of output is still matched,
-        # with everything before it intact and the rest still readable
         with lib50._api.spawn("sh -c 'echo a; sleep 0.3; echo b; sleep 0.3; echo READY; echo tail'", quiet=True, timeout=0.5) as child:
             self.assertEqual(child.expect(["READY", pexpect.EOF]), 0)
             self.assertEqual(child.before.replace("\r\n", "\n").strip(), "a\nb")

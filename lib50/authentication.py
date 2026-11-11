@@ -102,7 +102,7 @@ def run_authenticated(user, command, quiet=False, timeout=None):
     Run a command as a authenticated user. Returns command output.
 
     ``timeout`` is passed to ``lib50._api.spawn``: seconds the command may go without output,
-    ``None`` for ``lib50._api.COMMAND_TIMEOUT``.
+    ``None`` for ``lib50._api.COMMAND_IDLE_TIMEOUT``.
     """
     try:
         with api.spawn(command, quiet, timeout) as child:
