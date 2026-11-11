@@ -38,6 +38,12 @@ AUTH_URL = "https://submit.cs50.io"
 
 DEFAULT_FILE_LIMIT = 10000
 
+CONNECT_TIMEOUT = 5
+READ_TIMEOUT = 30
+REQUEST_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+
+COMMAND_IDLE_TIMEOUT = 120
+
 
 def push(tool, slug, config_loader, repo=None, data=None, prompt=lambda question, included, excluded: True, file_limit=DEFAULT_FILE_LIMIT, auth_method=None):
     """
@@ -927,11 +933,63 @@ class _StreamToLogger:
         pass
 
 
+class _IdleTimeoutSpawn(pexpect.spawn):
+    """
+    ``pexpect.spawn`` whose ``timeout`` is the longest the command may go without producing output,
+    rather than the longest an ``expect()`` call may take in total.
+
+    pexpect fixes its deadline when ``expect()`` starts, so with a plain ``spawn`` a timeout long enough
+    for a large transfer is far too long to notice a stalled one, and a timeout short enough to notice a
+    stall cuts off every transfer longer than it. Measuring idle time instead lets ``COMMAND_IDLE_TIMEOUT``
+    be short: git prints progress while a fetch, clone or push is moving, so output arriving resets the
+    clock, and only a command that has fallen silent, as one does when GitHub stops answering, expires.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._last_output = time.time()
+
+    def read_nonblocking(self, size=1, timeout=-1):
+        data = super().read_nonblocking(size, timeout)
+        if data:
+            self._last_output = time.time()
+        return data
+
+    def _expect_idle(self, expect, pattern_list, timeout, searchwindowsize, async_, **kw):
+        if timeout == -1:
+            timeout = self.timeout
+        if timeout is None or async_:
+            return expect(pattern_list, timeout, searchwindowsize, async_, **kw)
+        wait = timeout
+        while True:
+            try:
+                return expect(pattern_list, wait, searchwindowsize, async_, **kw)
+            except pexpect.TIMEOUT:
+                idle = time.time() - self._last_output
+                if idle >= timeout:
+                    raise
+                wait = timeout - idle
+
+    def expect_list(self, pattern_list, timeout=-1, searchwindowsize=-1, async_=False, **kw):
+        return self._expect_idle(super().expect_list, pattern_list, timeout, searchwindowsize, async_, **kw)
+
+    def expect_exact(self, pattern_list, timeout=-1, searchwindowsize=-1, async_=False, **kw):
+        return self._expect_idle(super().expect_exact, pattern_list, timeout, searchwindowsize, async_, **kw)
+
+
 @contextlib.contextmanager
 def spawn(command, quiet=False, timeout=None):
-    """Run (spawn) a command with `pexpect.spawn`"""
+    """
+    Run (spawn) a command with `pexpect.spawn`.
+
+    ``timeout`` is the number of seconds the command may go without producing output; ``None``
+    selects ``COMMAND_IDLE_TIMEOUT``. On expiry the command is killed and ``lib50.TimeoutError`` is raised.
+    """
+    if timeout is None:
+        timeout = COMMAND_IDLE_TIMEOUT
+
     # Spawn command
-    child = pexpect.spawn(
+    child = _IdleTimeoutSpawn(
         command,
         encoding="utf-8",
         env=dict(os.environ),
@@ -948,9 +1006,11 @@ def spawn(command, quiet=False, timeout=None):
     else:
         if child.isalive():
             try:
-                child.expect(pexpect.EOF, timeout=timeout)
+                child.expect(pexpect.EOF)
             except pexpect.TIMEOUT:
-                raise Error()
+                child.close(force=True)
+                logger.info(f"command {command} timed out")
+                raise TimeoutError(timeout)
         child.close(force=True)
         if child.signalstatus is None and child.exitstatus != 0:
             logger.debug("{} exited with {}".format(command, child.exitstatus))
@@ -979,7 +1039,7 @@ def run(command, quiet=False, timeout=None):
         command_output = child.before.strip().replace("\r\n", "\n")
     except pexpect.TIMEOUT:
         logger.info(f"command {command} timed out")
-        raise TimeoutError(timeout)
+        raise TimeoutError(child.timeout)
 
     return command_output
 
@@ -1029,8 +1089,8 @@ def get_content(org, repo, branch, filepath):
         """Handle SSL errors consistently."""
         raise ConnectionError(_(f"Could not connect to GitHub due to a SSL error.\nPlease check GitHub's status at githubstatus.com.\nError: {e}"))
     
-    def _handle_non_404_error():
-        """Handle non-404 HTTP errors consistently."""
+    def _handle_connection_failure():
+        """Handle non-404 HTTP errors and failed requests consistently."""
 
         # Check if GitHub outage may be the source of the issue
         check_github_status()
@@ -1039,11 +1099,13 @@ def get_content(org, repo, branch, filepath):
         raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
     
     def _make_request(url):
-        """Make a request and handle SSL errors."""
+        """Make a request and handle SSL errors and failed requests."""
         try:
-            return requests.get(url)
+            return requests.get(url, timeout=REQUEST_TIMEOUT)
         except requests.exceptions.SSLError as e:
             _handle_ssl_error(e)
+        except requests.exceptions.RequestException:
+            _handle_connection_failure()
     
     url = "https://github.com/{}/{}/raw/{}/{}".format(org, repo, branch, filepath)
     r = _make_request(url)
@@ -1067,9 +1129,9 @@ def get_content(org, repo, branch, filepath):
             logger.debug(f"Failed to fetch {fallback_url}: {r.status_code} {r.reason}")
             raise InvalidSlugError(_("Invalid slug. Did you mean to submit something else?"))
         else:
-            _handle_non_404_error()
+            _handle_connection_failure()
     else:
-        _handle_non_404_error()
+        _handle_connection_failure()
 
 
 def check_github_status():
@@ -1082,18 +1144,17 @@ def check_github_status():
     :raises lib50.ConnectionError: if the Git Operations and/or API requests components show an increase in errors.
     """
     # https://www.githubstatus.com/api
-    status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json")
-
-    # If status check failed
-    if not status_result.ok:
+    try:
+        status_result = requests.get("https://kctbh9vrtdwd.statuspage.io/api/v2/components.json", timeout=REQUEST_TIMEOUT)
+        status_result.raise_for_status()
+    except requests.exceptions.RequestException:
         raise ConnectionError(_("Could not connect to GitHub. Do make sure you are connected to the internet."))
 
     # Get the components lib50 uses
     components = status_result.json()["components"]
     relevant_components = [c for c in components if c["name"] in ("Git Operations", "API Requests")]
 
-    # If there is an indication of errors on GitHub's side
-    for component in components:
+    for component in relevant_components:
         if component["status"] != "operational":
             raise ConnectionError(
                 _("Could not connect to GitHub. "
